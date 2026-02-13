@@ -1,0 +1,18 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom component classes */
+@layer components {
+  .changeButtonColor {
+    @apply bg-primary hover:text-white;
+  }
+
+  .background {
+    @apply bg-primary text-white;
+  }
+
+  .selectedButton {
+    @apply border-2 border-primary text-black !important;
+  }
+}
