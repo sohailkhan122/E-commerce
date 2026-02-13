@@ -54,8 +54,9 @@ const ShippingPolicyPage = () => {
           <Collapse accordion>
             <Panel header="How to track your order?" key="1">
               <p className="text-gray-600">
-                Log in to your account, go to &quot;My Orders&quot;, select your order, and click on the tracking link provided.
+                {"Log in to your account, go to \"My Orders\", select your order, and click on the tracking link provided."}
               </p>
+
 
             </Panel>
             <Panel header="Tracking not updating?" key="2">
