@@ -1,27 +1,38 @@
 import { NextResponse } from "next/server";
-
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
 export async function POST(request) {
-    const { products, total } = await request.json();
-    console.log("Received products:", products);
-    console.log("Received total:", total);
+  try {
+    const { products } = await request.json(); // total ab optional
+
+    if (!products || products.length === 0) {
+      return NextResponse.json(
+        { error: "No products provided" },
+        { status: 400 }
+      );
+    }
 
     const session = await stripe.checkout.sessions.create({
-        success_url: `${process.env.NEXT_JS_URL}/confirm_order`,
-        line_items: [
-            {
-                price_data: {
-                    currency: 'usd',
-                    product_data: {
-                        name: products.map(p => p.title).join(', '), // Combine product names
-                    },
-                    unit_amount: total * 100, // Convert to cents
-                },
-                quantity: products.reduce((acc, p) => acc + p.quantity, 0), // Total quantity of all products
-            }
-        ],
-        mode: 'payment',
+      payment_method_types: ["card"],
+      mode: "payment",
+      line_items: products.map((p) => ({
+        price_data: {
+          currency: "usd",
+          product_data: { name: p.title },
+          unit_amount: Math.round(p.price * 100), // per item price in cents
+        },
+        quantity: p.quantity,
+      })),
+     success_url: `${process.env.NEXT_JS_URL}/confirm_order?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.NEXT_JS_URL}/check_out`,
     });
+
     return NextResponse.json({ message: session });
+  } catch (error) {
+    console.error("Stripe Checkout Error:", error);
+    return NextResponse.json(
+      { error: error.message },
+      { status: 500 }
+    );
+  }
 }

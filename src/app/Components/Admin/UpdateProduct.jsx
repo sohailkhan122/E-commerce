@@ -1,238 +1,251 @@
-"use client"
-import React, { useEffect, useState } from 'react';
-import { Spin, Table, Button, Popconfirm, message, Input, Form, Select } from 'antd';
-import axios from 'axios';
+"use client";
+
+import React, { useEffect, useState, useRef } from "react";
+import {
+  Spin,
+  Table,
+  Button,
+  Popconfirm,
+  message,
+  Input,
+  Form,
+  Select,
+  Row,
+  Col,
+  Card,
+} from "antd";
+import { CloseOutlined } from "@ant-design/icons";
+import { getAllProducts, updateProduct, deleteProduct } from "@/app/api/product";
+import axios from "axios";
 
 const { Option } = Select;
 
+const categories = ["Men", "Women", "Shoes", "Accessories", "NewArrivals", "InTheLimelight"];
+const types = [
+  "Tops", "PrintedT-Shirt", "PlainT-Shirt", "Kurti", "Jeans", "Trousers", "Shorts", "Skirts",
+  "Dresses", "Jumpsuits", "Sneakers", "Boots", "Sandals", "Heels", "Bags", "Watches", "Jewelry"
+];
+
 const UpdateProduct = () => {
-    const [loading, setLoading] = useState(true);
-    const [products, setProducts] = useState([]);
-    const [deleteLoading, setDeleteLoading] = useState({});
-    const [editMode, setEditMode] = useState(false);
-    const [editedProduct, setEditedProduct] = useState(null);
-    const [form] = Form.useForm();
-    const [refresh, setRefresh] = useState(false);
-    const [imageUrl, setImageUrl] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [products, setProducts] = useState([]);
+  const [deleteLoading, setDeleteLoading] = useState({});
+  const [editMode, setEditMode] = useState(false);
+  const [editedProduct, setEditedProduct] = useState(null);
+  const [imageUrls, setImageUrls] = useState([]); // this is used for preview & update
+  const fileInputRef = useRef(null);
+  const [form] = Form.useForm();
+  const [refresh, setRefresh] = useState(false);
 
-    useEffect(() => {
-        const fetchProducts = async () => {
-            try {
-                const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/product/getAllProducts`);
-                setProducts(response.data);
-                setLoading(false);
-            } catch (error) {
-                console.error('Error fetching products:', error);
-            }
-        };
+  const fetchProducts = async () => {
+    setLoading(true);
+    try {
+      const data = await getAllProducts();
+      setProducts(data);
+    } catch (error) {
+      message.error("Failed to fetch products");
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-        fetchProducts();
-    }, [refresh]);
+  useEffect(() => {
+    fetchProducts();
+  }, [refresh]);
 
-    const handleDelete = async (productId) => {
-        try {
-            setDeleteLoading(prevState => ({ ...prevState, [productId]: true }));
-            await axios.delete(`${process.env.NEXT_PUBLIC_API_URL}/product/deleteProducts/${productId}`);
-            setProducts(products.filter(product => product._id !== productId));
-            message.success('Product deleted successfully');
-        } catch (error) {
-            console.error('Error deleting product:', error);
-            message.error('Failed to delete product');
-        } finally {
-            setDeleteLoading(prevState => ({ ...prevState, [productId]: false }));
-        }
-    };
+  const handleDelete = async (id) => {
+    try {
+      setDeleteLoading(prev => ({ ...prev, [id]: true }));
+      await deleteProduct(id);
+      message.success("Product deleted successfully");
+      setRefresh(prev => !prev);
+    } catch (error) {
+      message.error("Failed to delete product");
+      console.error(error);
+    } finally {
+      setDeleteLoading(prev => ({ ...prev, [id]: false }));
+    }
+  };
 
-    const handleEdit = (product) => {
-        setEditMode(true);
-        setEditedProduct(product);
-        console.log(product.images)
-        setImageUrl(product.images);
-        form.setFieldsValue({
-            title: product.title,
-            productName: product.productName,
-            price: product.price,
-            category: product.category,
-            type: product.type
-        });
-    };
+  const handleEdit = (product) => {
+    setEditMode(true);
+    setEditedProduct(product);
+    setImageUrls(product.images || []);
+    form.setFieldsValue({
+      title: product.title,
+      productName: product.productName,
+      price: product.price,
+      category: product.category,
+      type: product.type,
+      stock: product.stock,
+      isActive: product.isActive,
+    });
+  };
 
+  const handleCancel = () => {
+    setEditMode(false);
+    setEditedProduct(null);
+    setImageUrls([]);
+    form.resetFields();
+    if (fileInputRef.current) fileInputRef.current.value = null;
+  };
 
-    const handleSave = async () => {
-        try {
-            const values = await form.validateFields();
-            const updatedProduct = { ...editedProduct, ...values, images: imageUrl };
-            await axios.put(`${process.env.NEXT_PUBLIC_API_URL}/product/editProduct/${editedProduct._id}`, updatedProduct);
-            message.success('Product updated successfully');
-            setRefresh(!refresh);
-            setEditMode(false);
-            setEditedProduct(null);
-        } catch (error) {
-            console.error('Error updating product:', error);
-            message.error('Failed to update product');
-        }
-    };
+  const handleSave = async () => {
+    try {
+      const values = await form.validateFields();
+      const updatedProduct = { ...editedProduct, ...values, images: imageUrls };
+      await updateProduct(editedProduct._id, updatedProduct);
+      message.success("Product updated successfully");
+      handleCancel();
+      setRefresh(prev => !prev);
+    } catch (error) {
+      message.error(error.response?.data?.message || "Failed to update product");
+      console.error(error);
+    }
+  };
 
-    const handleImageUpload = async (e) => {
-        const file = e.target.files[0];
-        try {
-            const imageData = new FormData();
-            imageData.append('file', file);
-            imageData.append('upload_preset', 'e_commerce_Images');
+  // ✅ Corrected image upload
+  const handleImageUpload = async (e) => {
+    const files = Array.from(e.target.files);
+    const uploadedImages = [];
 
-            const response = await axios.post('https://api.cloudinary.com/v1_1/dbt3nqg5f/image/upload', imageData);
+    for (let file of files) {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("upload_preset", "e_commerce_Images"); // unsigned preset
 
-            if (response.status === 200) {
-                const imageURL = response.data.secure_url;
-                setImageUrl(imageURL);
-            } else {
-                message.error('Failed to upload image');
-            }
-        } catch (error) {
-            console.error('Error uploading image:', error);
-            message.error('Failed to upload image');
-        }
-    };
+      try {
+        const response = await axios.post(
+          "https://api.cloudinary.com/v1_1/dbt3nqg5f/image/upload",
+          formData
+        );
+        uploadedImages.push(response.data.secure_url);
+      } catch (error) {
+        message.error("Image upload failed");
+        console.error(error);
+      }
+    }
 
-    const columns = [
-        {
-            title: 'Title',
-            dataIndex: 'title',
-            key: 'title',
-        },
-        {
-            title: 'Product Name',
-            dataIndex: 'productName',
-            key: 'productName',
-        },
-        {
-            title: 'Price',
-            dataIndex: 'price',
-            key: 'price',
-            render: (price) => `$${price}`
-        },
-        {
-            title: 'Category',
-            dataIndex: 'category',
-            key: 'category',
-        },
-        {
-            title: 'Type',
-            dataIndex: 'type',
-            key: 'type',
-        },
-        {
-            title: 'Image',
-            dataIndex: 'images',
-            key: 'images',
-            render: (images) => (
-                <img src={images} alt="Product" style={{ width: 50 }} />
-            ),
-        },
-        {
-            title: 'Action',
-            key: 'action',
-            render: (_, record) => (
-                <span>
-                    <Button type="primary" onClick={() => handleEdit(record)}>Edit</Button>
-                    <Popconfirm
-                        title="Are you sure to delete this product?"
-                        onConfirm={() => handleDelete(record._id)}
-                        okText="Yes"
-                        cancelText="No"
-                    >
-                        <Button type="danger" style={{ marginLeft: 8 }} loading={deleteLoading[record._id]}>Delete</Button>
-                    </Popconfirm>
-                </span>
-            ),
-        },
-    ];
+    setImageUrls(prev => [...prev, ...uploadedImages]);
+  };
 
-    return (
-        <div>
-            {loading ? (
-                <div style={{ width: '100%', height: '100%', display: 'flex', justifyContent: 'center' }}>
-                    <Spin size="large" />
-                </div>
-            ) : (
-                editMode ? (
-                    <div>
-                        <Form
-                            form={form}
-                            onFinish={handleSave}
-                            layout="vertical"
-                        >
-                            <Form.Item
-                                name="title"
-                                label="Title"
-                                rules={[{ required: true, message: 'Please enter the product title' }]}
-                            >
-                                <Input />
-                            </Form.Item>
-                            <Form.Item
-                                name="productName"
-                                label="Product Name"
-                                rules={[{ required: true, message: 'Please enter the product name' }]}
-                            >
-                                <Input />
-                            </Form.Item>
-                            <Form.Item
-                                name="price"
-                                label="Price"
-                                rules={[{ required: true, message: 'Please enter the product Price' }]}
-                            >
-                                <Input type='number' />
-                            </Form.Item>
-                            <Form.Item
-                                name="category"
-                                label="Category"
-                                rules={[{ required: true, message: 'Please select the product category' }]}
-                            >
-                                <Select>
-                                    <Option value="New_Arrival">New Arrival</Option>
-                                    <Option value="Categories_For_Men">Categories For Men</Option>
-                                    <Option value="Categories_For_Women">Categories For Women</Option>
-                                    <Option value="In_The_Limelight">In The Limelight</Option>
-                                    <Option value="joggers">Joggers</Option>
-                                </Select>
-                            </Form.Item>
-                            <Form.Item
-                                name="type"
-                                label="Type"
-                                rules={[{ required: true, message: 'Please enter the product type' }]}
-                            >
-                                <Select>
-                                    <Option value="tops">Tops</Option>
-                                    <Option value="printed_t_shirt">Printed T-Shirt</Option>
-                                    <Option value="plain_t_shirt">Plain T-Shirt</Option>
-                                    <Option value="kurti">Kurti</Option>
-                                    <Option value="jeans">Jeans</Option>
-                                    <Option value="normalshoes">Shoes Normal</Option>
-                                    <Option value="joggers">Joggers</Option>
-                                    <Option value="snackers">Snackers</Option>
-                                </Select>
-                            </Form.Item>
-                            <Form.Item label="Upload">
-                                <input type="file" onChange={handleImageUpload} />
-                            </Form.Item>
-                            <Form.Item wrapperCol={{ offset: 8, span: 16 }}>
-                                <div style={{ display: 'flex', gap: '20px' }}>
-                                    <Button type="primary" htmlType="submit">
-                                        Submit
-                                    </Button>
-                                    <Button onClick={() => setEditMode(false)} >
-                                        Cancel
-                                    </Button>
-                                </div>
-                            </Form.Item>
-                        </Form>
-                    </div>
-                ) : (
-                    <Table dataSource={products} columns={columns} rowKey="_id" />
-                )
-            )}
+  const removeImage = (url) => {
+    setImageUrls(prev => prev.filter(img => img !== url));
+  };
+
+  const columns = [
+    { title: "Title", dataIndex: "title", key: "title", responsive: ["sm"] },
+    { title: "Product Name", dataIndex: "productName", key: "productName", responsive: ["sm"] },
+    { title: "Price", dataIndex: "price", key: "price", render: p => `$${p}`, responsive: ["sm"] },
+    { title: "Category", dataIndex: "category", key: "category", responsive: ["md"] },
+    { title: "Type", dataIndex: "type", key: "type", responsive: ["md"] },
+    {
+      title: "Image",
+      dataIndex: "images",
+      key: "images",
+      render: (images) => (
+        <img
+          src={Array.isArray(images) ? images[0] : images}
+          alt="Product"
+          className="w-12 h-12 object-cover rounded"
+        />
+      ),
+      responsive: ["sm"],
+    },
+    {
+      title: "Action",
+      key: "action",
+      render: (_, record) => (
+        <div className="flex flex-wrap gap-2">
+          <Button type="primary" onClick={() => handleEdit(record)}>Edit</Button>
+          <Popconfirm title="Are you sure?" onConfirm={() => handleDelete(record._id)}>
+            <Button danger loading={deleteLoading[record._id]}>Delete</Button>
+          </Popconfirm>
         </div>
-    );
+      ),
+    },
+  ];
+
+  return (
+    <div className="p-4">
+      {loading ? (
+        <div className="flex justify-center items-center h-64">
+          <Spin size="large" />
+        </div>
+      ) : editMode ? (
+        <Card title="Update Product" className="max-w-3xl mx-auto">
+          <Form form={form} layout="vertical" className="space-y-4">
+            <Row gutter={16}>
+              <Col xs={24} md={12}>
+                <Form.Item name="title" label="Title" rules={[{ required: true }]}>
+                  <Input />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={12}>
+                <Form.Item name="productName" label="Product Name" rules={[{ required: true }]}>
+                  <Input />
+                </Form.Item>
+              </Col>
+            </Row>
+
+            <Row gutter={16}>
+              <Col xs={24} md={12}>
+                <Form.Item name="price" label="Price" rules={[{ required: true }]}>
+                  <Input type="number" />
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={12}>
+                <Form.Item name="stock" label="Stock" rules={[{ required: true }]}>
+                  <Input type="number" />
+                </Form.Item>
+              </Col>
+            </Row>
+
+            <Row gutter={16}>
+              <Col xs={24} md={12}>
+                <Form.Item name="category" label="Category" rules={[{ required: true }]}>
+                  <Select placeholder="Select category">
+                    {categories.map(cat => <Option key={cat} value={cat}>{cat}</Option>)}
+                  </Select>
+                </Form.Item>
+              </Col>
+              <Col xs={24} md={12}>
+                <Form.Item name="type" label="Type" rules={[{ required: true }]}>
+                  <Select placeholder="Select type">
+                    {types.map(t => <Option key={t} value={t}>{t}</Option>)}
+                  </Select>
+                </Form.Item>
+              </Col>
+            </Row>
+
+            <Form.Item label="Upload Images">
+              <input type="file" multiple onChange={handleImageUpload} ref={fileInputRef} />
+            </Form.Item>
+
+            <div className="flex flex-wrap gap-2 mb-4">
+              {imageUrls.map((img, i) => (
+                <div key={i} className="relative w-24 h-24 sm:w-20 sm:h-20">
+                  <img src={img} alt="preview" className="w-full h-full object-cover rounded" />
+                  <CloseOutlined
+                    onClick={() => removeImage(img)}
+                    className="absolute -top-2 -right-2 text-red-600 cursor-pointer"
+                  />
+                </div>
+              ))}
+            </div>
+
+            <div className="flex flex-wrap gap-4">
+              <Button type="primary" onClick={handleSave}>Save</Button>
+              <Button onClick={handleCancel}>Cancel</Button>
+            </div>
+          </Form>
+        </Card>
+      ) : (
+        <Table dataSource={products} columns={columns} rowKey="_id" className="overflow-x-auto" />
+      )}
+    </div>
+  );
 };
 
 export default UpdateProduct;

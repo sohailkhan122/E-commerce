@@ -1,144 +1,149 @@
 'use client'
 import React, { useEffect, useState } from 'react';
-import { Button, Table, Spin } from 'antd';
-import axios from 'axios';
-import OrderDetails from './OrderDetails';
+import { Button } from 'antd';
 import { CheckSquareOutlined } from '@ant-design/icons';
+import OrderDetails from './OrderDetails';
+import { getAllOrders, updateOrderStatus } from '@/app/api/order';
 
 const OrderList = () => {
   const [orders, setOrders] = useState([]);
-  const [selectedOrderId, setSelectedOrderId] = useState(null);
-  const [refresh, setRefresh] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [pending, setPending] = useState(0);
-  const [processing, setProcessing] = useState(0);
-  const [shipped, setShipped] = useState(0);
-  const [delivered, setDelivered] = useState(0);
+  const [selectedOrder, setSelectedOrder] = useState(null); // ✅ full order object
+  const [loadingOrders, setLoadingOrders] = useState({});
 
   useEffect(() => {
     const fetchAllOrders = async () => {
       try {
-        setLoading(true);
-        const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/order/fatchAllOrders`);
-        setOrders(response.data);
-        const filterPending = response.data.filter((item) => item.status.toLowerCase().includes('pending'));
-        setPending(filterPending.length);
-        const filterProcessing = response.data.filter((item) => item.status.toLowerCase().includes('processing'));
-        setProcessing(filterProcessing.length);
-        const filterShipped = response.data.filter((item) => item.status.toLowerCase().includes('shipped'));
-        setShipped(filterShipped.length);
-        const filterDelivered = response.data.filter((item) => item.status.toLowerCase().includes('delivered'));
-        setDelivered(filterDelivered.length);
+        const response = await getAllOrders();
+        setOrders(response.orders || []);
       } catch (error) {
         console.error('Failed to fetch orders:', error);
-      } finally {
-        setLoading(false);
       }
     };
     fetchAllOrders();
-  }, [refresh]);
+  }, []);
 
-  const handleUpdateStatus = async (orderId, status) => {
+  const handleUpdateStatus = async (orderId, newStatus) => {
     try {
-      setLoading(true);
-      const response = await axios.put(`${process.env.NEXT_PUBLIC_API_URL}/order/updateOrderStatus/${orderId}`, { status });
-      setRefresh(prev => !prev);
-      return response.data;
+      setLoadingOrders(prev => ({ ...prev, [orderId]: true }));
+      await updateOrderStatus(orderId, newStatus);
+      setOrders(prevOrders =>
+        prevOrders.map(order =>
+          order._id === orderId ? { ...order, status: newStatus } : order
+        )
+      );
     } catch (error) {
       console.error('Error updating order status:', error);
-      throw error;
     } finally {
-      setLoading(false);
+      setLoadingOrders(prev => ({ ...prev, [orderId]: false }));
     }
   };
 
   const renderActionButton = (status, orderId) => {
+    const isLoading = loadingOrders[orderId];
     switch (status) {
       case 'pending':
-        return <Button onClick={() => handleUpdateStatus(orderId, 'processing')}>Processing</Button>;
+        return (
+          <Button
+            onClick={() => handleUpdateStatus(orderId, 'processing')}
+            className="bg-yellow-400 hover:bg-yellow-500 text-white"
+            loading={isLoading}
+          >
+            Processing
+          </Button>
+        );
       case 'processing':
-        return <Button onClick={() => handleUpdateStatus(orderId, 'shipped')}>Shipped</Button>;
+        return (
+          <Button
+            onClick={() => handleUpdateStatus(orderId, 'shipped')}
+            className="bg-blue-500 hover:bg-blue-600 text-white"
+            loading={isLoading}
+          >
+            Shipped
+          </Button>
+        );
       case 'shipped':
-        return <Button onClick={() => handleUpdateStatus(orderId, 'delivered')}>Delivered</Button>;
+        return (
+          <Button
+            onClick={() => handleUpdateStatus(orderId, 'delivered')}
+            className="bg-green-500 hover:bg-green-600 text-white"
+            loading={isLoading}
+          >
+            Delivered
+          </Button>
+        );
       default:
         return (
-          <>
+          <div className="flex items-center gap-2 text-gray-600">
             <CheckSquareOutlined /> <span>Done</span>
-          </>
+          </div>
         );
     }
   };
 
-  const columns = [
-    {
-      title: 'Order ID',
-      dataIndex: '_id',
-      key: '_id',
-    },
-    {
-      title: 'User ID',
-      dataIndex: 'userId',
-      key: 'userId',
-    },
-    {
-      title: 'Total',
-      dataIndex: 'total',
-      key: 'total',
-    },
-    {
-      title: 'Status',
-      dataIndex: 'status',
-      key: 'status',
-    },
-    {
-      title: 'Action',
-      key: 'action',
-      render: (_, record) => (
-        <span>
-          <Button onClick={() => setSelectedOrderId(record._id)}>View</Button>
-        </span>
-      ),
-    },
-    {
-      title: 'Update Status',
-      key: 'updateStatus',
-      render: (_, record) => <span>{renderActionButton(record.status, record._id)}</span>,
-    },
-  ];
+  // 🔹 Counters for summary cards
+  const pending = orders.filter(o => o.status === 'pending').length;
+  const processing = orders.filter(o => o.status === 'processing').length;
+  const shipped = orders.filter(o => o.status === 'shipped').length;
+  const delivered = orders.filter(o => o.status === 'delivered').length;
+
+  if (selectedOrder) {
+    // ✅ Pass the full order object
+    return <OrderDetails selectedOrder={selectedOrder} setSelectedOrder={setSelectedOrder} />;
+  }
 
   return (
-    <div>
-      {selectedOrderId ? (
-        <OrderDetails orderId={selectedOrderId} setSelectedOrderId={setSelectedOrderId} />
-      ) : (
-        <>
-          {loading ? (
-            <div style={{ textAlign: 'center', padding: '20px' }}>
-              <Spin size="large" />
-            </div>
-          ) : (
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '30px' }}>
-              <div style={{ width: '250px', height: '200px', boxShadow: 'rgba(149, 157, 165, 0.2) 0px 8px 24px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: '20px' }}>
-                <h1 style={{ fontSize: '28px', fontWeight: '700' }}>Pending Orders</h1>
-                <h2 style={{ fontSize: '28px', fontWeight: '700' }}>{pending}</h2>
-              </div>
-              <div style={{ width: '250px', height: '200px', boxShadow: 'rgba(149, 157, 165, 0.2) 0px 8px 24px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: '20px' }}>
-                <h1 style={{ fontSize: '28px', fontWeight: '700' }}>Processing Orders</h1>
-                <h2 style={{ fontSize: '28px', fontWeight: '700' }}>{processing}</h2>
-              </div>
-              <div style={{ width: '250px', height: '200px', boxShadow: 'rgba(149, 157, 165, 0.2) 0px 8px 24px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: '20px' }}>
-                <h1 style={{ fontSize: '28px', fontWeight: '700' }}>Shipped Orders</h1>
-                <h2 style={{ fontSize: '28px', fontWeight: '700' }}>{shipped}</h2>
-              </div>
-              <div style={{ width: '250px', height: '200px', boxShadow: 'rgba(149, 157, 165, 0.2) 0px 8px 24px', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: '20px' }}>
-                <h1 style={{ fontSize: '28px', fontWeight: '700' }}>Delivered Orders</h1>
-                <h2 style={{ fontSize: '28px', fontWeight: '700' }}>{delivered}</h2>
-              </div>
-            </div>
-          )}
-          <Table columns={columns} dataSource={orders} rowKey="_id" />
-        </>
-      )}
+    <div className="p-4 space-y-6">
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+        {[
+          { label: 'Pending Orders', count: pending, color: 'bg-yellow-400' },
+          { label: 'Processing Orders', count: processing, color: 'bg-blue-500' },
+          { label: 'Shipped Orders', count: shipped, color: 'bg-indigo-500' },
+          { label: 'Delivered Orders', count: delivered, color: 'bg-green-500' }
+        ].map((item, idx) => (
+          <div key={idx} className={`flex flex-col justify-center items-center p-4 rounded-xl shadow-md text-white ${item.color} h-40`}>
+            <h2 className="text-xl font-semibold text-center">{item.label}</h2>
+            <h1 className="text-3xl font-bold">{item.count}</h1>
+          </div>
+        ))}
+      </div>
+
+      {/* Orders Table */}
+      <div className="overflow-x-auto">
+        <table className="min-w-full bg-white border border-gray-200 rounded-lg">
+          <thead className="bg-gray-100">
+            <tr>
+              <th className="py-2 px-4 text-left border-b">Order ID</th>
+              <th className="py-2 px-4 text-left border-b">User Name</th>
+              <th className="py-2 px-4 text-left border-b">Email</th>
+              <th className="py-2 px-4 text-left border-b">Total</th>
+              <th className="py-2 px-4 text-left border-b">Status</th>
+              <th className="py-2 px-4 text-left border-b">View</th>
+              <th className="py-2 px-4 text-left border-b">Update Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {orders.map(order => (
+              <tr key={order._id} className="hover:bg-gray-50">
+                <td className="py-2 px-4 border-b">{order._id.slice(0, 6)}</td>
+                <td className="py-2 px-4 border-b">{order.userId?.name || 'N/A'}</td>
+                <td className="py-2 px-4 border-b">{order.userId?.email || 'N/A'}</td>
+                <td className="py-2 px-4 border-b">${order.total}</td>
+                <td className="py-2 px-4 border-b capitalize">{order.status}</td>
+                <td className="py-2 px-4 border-b">
+                  <Button
+                    onClick={() => setSelectedOrder(order)} // ✅ pass the full order
+                    className="bg-gray-500 hover:bg-gray-600 text-white"
+                  >
+                    View
+                  </Button>
+                </td>
+                <td className="py-2 px-4 border-b">{renderActionButton(order.status, order._id)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 };

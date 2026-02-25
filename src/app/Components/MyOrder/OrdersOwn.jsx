@@ -1,35 +1,25 @@
 "use client";
 import { Button, Typography, Skeleton } from "antd";
 import React, { useEffect, useState } from "react";
-import OrderCard from "./OrderCard";
-import axios from "axios";
+import OrderCard from "./OrderCard"; // pre-configured axios instance
 import { useRouter } from "next/navigation";
+import { getUserOrders } from "@/app/api/order";
 
 const { Title, Text } = Typography;
 
-const OrdersOwn = ({ setSelectedOrderveiwId, setValue }) => {
+const OrdersOwn = ({ setorder, setValue }) => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
-
-  const userId =
-    typeof window !== "undefined"
-      ? JSON.parse(localStorage.getItem("userData"))?._id
-      : null;
 
   const router = useRouter();
 
   useEffect(() => {
-    if (!userId) return;
-
-    const fetchOrdersByUserId = async () => {
+    const fetchOrders = async () => {
       try {
         setLoading(true);
-        const response = await axios.get(
-          `${process.env.NEXT_PUBLIC_API_URL}/order/getOrdersByUserId/${userId}`
-        );
-
-        if (response.data.success) {
-          setOrders(response.data.orders);
+        const response = await getUserOrders(); // backend: /api/orders
+        if (response.success) {
+          setOrders(response.orders);
         }
       } catch (error) {
         console.error("Error fetching orders:", error.message);
@@ -38,8 +28,8 @@ const OrdersOwn = ({ setSelectedOrderveiwId, setValue }) => {
       }
     };
 
-    fetchOrdersByUserId();
-  }, [userId]);
+    fetchOrders();
+  }, []);
 
   /* ---------- Empty State ---------- */
   if (!loading && orders.length === 0) {
@@ -50,18 +40,17 @@ const OrdersOwn = ({ setSelectedOrderveiwId, setValue }) => {
           alt="No Orders"
           className="max-w-xs md:max-w-md w-full object-contain"
         />
-
         <div>
           <Title level={3}>No Orders 😕</Title>
           <Text type="secondary">Add something to make it happy!</Text>
         </div>
-
         <Button type="primary" onClick={() => router.push("/")}>
           Continue Shopping
         </Button>
       </div>
     );
   }
+
   /* ---------- Orders List ---------- */
   return (
     <div className="w-full max-w-5xl mx-auto px-4 sm:px-6 py-6">
@@ -76,10 +65,10 @@ const OrdersOwn = ({ setSelectedOrderveiwId, setValue }) => {
           ))
           : orders.map((item) => (
             <OrderCard
-              key={item._id}
-              data={item}
+              key={item._id} // Use a unique identifier like item._id instead of Math.random()
+              item={item}
               setValue={setValue}
-              setSelectedOrderveiwId={setSelectedOrderveiwId}
+              setorder={setorder}
             />
           ))}
       </div>

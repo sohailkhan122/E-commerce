@@ -1,8 +1,8 @@
 "use client";
 import React, { useState } from "react";
 import { Button, Checkbox, Form, Input, message, Spin } from "antd";
-import axios from "axios";
 import { useRouter } from "next/navigation";
+import { loginUser } from "@/app/api/user";
 
 const LogIn = () => {
   const [loading, setLoading] = useState(false);
@@ -11,17 +11,16 @@ const LogIn = () => {
   const onFinish = async (values) => {
     setLoading(true);
     try {
-      const response = await axios.post(
-        `${process.env.NEXT_PUBLIC_API_URL}/user/login`,
-        values
-      );
-
-      message.success("Login successful!");
-      localStorage.setItem("userData", JSON.stringify(response.data));
-      router.push("/");
+      const data = await loginUser(values.email, values.password);
+      message.success(data?.message || "Login successful!");
+      if (data?.isAdmin) {
+        router.push("/admin"); // admin dashboard route
+      } else {
+        router.push("/"); // regular user route
+      }
     } catch (error) {
       message.error(
-        error?.response?.data?.error || "Invalid credentials"
+        error?.message || "Invalid credentials"
       );
     } finally {
       setLoading(false);

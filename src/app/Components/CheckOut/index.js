@@ -2,136 +2,152 @@
 import React, { useEffect, useState } from "react";
 import { Button, Checkbox, Form, Input, Select, message, Skeleton } from "antd";
 import TextArea from "antd/es/input/TextArea";
-import { useRouter } from "next/navigation";
+import { getCurrentUser, updateUser } from "@/app/api/user";
+import { getCart } from "@/app/api/cart";
 import axios from "axios";
 
 const CheckOut = () => {
   const [loading, setLoading] = useState(true);
-  const [updating, setUpdating] = useState(false); // Spinner for "Update Information"
+  const [updating, setUpdating] = useState(false);
   const [processingPayment, setProcessingPayment] = useState(false);
-  const router = useRouter();
   const [userData, setUserData] = useState(null);
-  const [productDetails, setProductDetails] = useState([]);
+  const [cartItems, setCartItems] = useState([]);
   const shippingCharges = 5.8;
+  const [infoUpdated, setInfoUpdated] = useState(false); // ✅ track if user updated info
 
-  const userId =
-    typeof window !== "undefined"
-      ? JSON.parse(localStorage.getItem("userData"))?._id
-      : null;
+  const [selectedCountry, setSelectedCountry] = useState(null);
+  const [selectedState, setSelectedState] = useState(null);
+  const [form] = Form.useForm();
 
-  // Fetch user data
+  const countryData = {
+    Pakistan: {
+      provinces: ["Punjab", "Sindh", "Khyber Pakhtunkhwa", "Balochistan"],
+      cities: {
+        Punjab: ["Lahore", "Faisalabad", "Rawalpindi"],
+        Sindh: ["Karachi", "Hyderabad", "Sukkur"],
+        "Khyber Pakhtunkhwa": ["Peshawar", "Abbottabad", "Mardan"],
+        Balochistan: ["Quetta", "Gwadar", "Sibi"],
+      },
+    },
+    USA: {
+      states: ["California", "Texas", "New York", "Florida"],
+      cities: {
+        California: ["Los Angeles", "San Francisco", "San Diego"],
+        Texas: ["Houston", "Dallas", "Austin"],
+        "New York": ["New York City", "Buffalo", "Rochester"],
+        Florida: ["Miami", "Orlando", "Tampa"],
+      },
+    },
+  };
+
+  // ---------------- FETCH CURRENT USER ----------------
   useEffect(() => {
-    if (!userId) return;
-    const getUserById = async () => {
+    const fetchCurrentUser = async () => {
       try {
-        const response = await axios.get(
-          `${process.env.NEXT_PUBLIC_API_URL}/user/getUserById/${userId}`
-        );
-        setUserData(response.data);
+        const response = await getCurrentUser(); // cookie se backend user fetch kare
+        setUserData(response.user);
       } catch (error) {
-        console.error("Error fetching user by ID:", error);
+        console.error("Error fetching current user:", error);
         message.error("Failed to fetch user data");
       }
     };
-    getUserById();
-  }, [userId]);
+    fetchCurrentUser();
+  }, []);
 
-  // Fetch cart details
+  // ---------------- FETCH CART ----------------
   useEffect(() => {
-    if (!userId) return;
-    const fetchData = async () => {
+    const fetchCartItems = async () => {
       try {
-        const response = await axios.get(
-          `${process.env.NEXT_PUBLIC_API_URL}/cart/getCartItem/${userId}`
-        );
-        const { products } = response.data.cartItem || {};
+        setLoading(true);
+        const res = await getCart();
+        const cartData = res.cartItem?.products || [];
 
-        if (!products || products.length === 0) {
-          router.push("/");
+        if (cartData.length === 0) {
+          setCartItems([]);
           return;
         }
 
-        const productDetailPromises = products.map(async (product) => {
-          const productDetailResponse = await axios.get(
-            `${process.env.NEXT_PUBLIC_API_URL}/product/getSingleProduct/${product.productId}`
-          );
-          return { ...product, ...productDetailResponse.data };
-        });
+        const items = cartData.map((p) => ({
+          _id: p.productId._id,
+          title: p.productId.title,
+          images: p.productId.images,
+          price: p.productId.price,
+          quantity: p.quantity,
+        }));
 
-        const productDetails = await Promise.all(productDetailPromises);
-        setProductDetails(productDetails);
+        setCartItems(items);
       } catch (error) {
-        console.error("Error fetching data:", error);
-        message.error("Failed to fetch cart details");
+        console.error("Failed to load cart:", error);
+        message.error("Failed to load cart");
       } finally {
         setLoading(false);
       }
     };
 
-    fetchData();
-  }, [userId, router]);
+    fetchCartItems();
+  }, []);
 
+  // ---------------- UPDATE USER ----------------
   const onFinish = async (values) => {
     try {
-       setUpdating(true);
-      await axios.put(
-        `${process.env.NEXT_PUBLIC_API_URL}/user/updateUser/${userId}`,
-        values
-      );
+      setUpdating(true);
+      await updateUser(values);
       message.success("User information updated successfully");
+      setUserData({ ...userData, ...values }); // update frontend state
+
+      setInfoUpdated(true); // ✅ enable the payment button
     } catch (error) {
+      console.error(error);
       message.error("Failed to update user information");
     } finally {
       setUpdating(false);
     }
   };
 
-  const subtotal = productDetails.reduce(
-    (acc, curr) => acc + curr.price * curr.quantity,
+  // ---------------- SUBTOTAL & TOTAL ----------------
+  const subtotal = cartItems.reduce(
+    (acc, item) => acc + item.price * item.quantity,
     0
   );
   const total = subtotal + shippingCharges;
-  const startstripeCheckout = async () => {
+
+  // ---------------- STRIPE CHECKOUT ----------------
+  const startStripeCheckout = async () => {
     try {
-       setProcessingPayment(true); // <-- Start spinner
+      setProcessingPayment(true); // spinner start
+
+      // axios instance or plain axios can be used
       const response = await axios.post("/api/stripe_checkout", {
-        products: productDetails,
-        total: total,
+        products: cartItems, // array of products with { title, price, quantity }
       });
+
       const { message: session } = response.data;
 
-      if (session.url) {
+      if (session?.url) {
         window.location.href = session.url; // Redirect to Stripe Checkout
-      }
-      else {
+      } else {
         message.error("Failed to create Stripe checkout session");
       }
-
     } catch (error) {
       console.error("Error starting Stripe checkout:", error);
       message.error("Failed to start Stripe checkout");
+    } finally {
+      setProcessingPayment(false); // spinner stop
     }
-    finally {
-      setProcessingPayment(false); // <-- Stop spinner
-    }
-  }
-  console.log("Product Details:", productDetails);
+  };
+
   return (
     <div className="min-h-screen px-4 md:px-8 lg:px-16 py-8 flex flex-col lg:flex-row gap-8 lg:gap-12 mb-32">
-      {/* Billing Form */}
+      {/* ---------------- BILLING FORM ---------------- */}
       <div className="flex-1 bg-white p-6 rounded-xl shadow">
         <div className="flex items-center gap-2 mb-6">
-          <img
-            src="/Images/New Arrival Logo.png"
-            alt="Logo"
-            className="h-8 w-auto"
-          />
+          <img src="/Images/New Arrival Logo.png" alt="Logo" className="h-8 w-auto" />
           <h1 className="text-2xl md:text-3xl font-bold m-0">Checkout</h1>
         </div>
         <h2 className="text-xl font-semibold mb-4">Billing Details</h2>
 
         {loading ? (
-          <Skeleton active paragraph={{ rows: 8 }} />
+          <Skeleton active paragraph={{ rows: 12 }} />
         ) : (
           userData && (
             <Form
@@ -141,11 +157,12 @@ const CheckOut = () => {
               initialValues={userData}
               className="flex flex-wrap gap-4"
             >
+              {/* Desktop: 2 fields per row, Mobile: 1 field per row */}
               <Form.Item
                 name="name"
                 label="First Name"
-                rules={[{ required: true, message: "Please input your name!" }]}
-                className="w-full md:w-[48%]"
+                rules={[{ required: true }]}
+                className="w-full sm:w-full md:w-[48%]"
               >
                 <Input />
               </Form.Item>
@@ -153,43 +170,36 @@ const CheckOut = () => {
               <Form.Item
                 name="lastname"
                 label="Last Name"
-                rules={[
-                  { required: true, message: "Please input your last name!" },
-                ]}
-                className="w-full md:w-[48%]"
+                className="w-full sm:w-full md:w-[48%]"
               >
                 <Input />
               </Form.Item>
 
               <Form.Item
                 name="region"
-                label="Country / Region"
-                rules={[
-                  { required: true, message: "Please input your region!" },
-                ]}
-                className="w-full md:w-[48%]"
+                label="Country"
+                rules={[{ required: true, message: "Please select a country" }]}
+                className="w-full sm:w-full md:w-[48%]"
               >
-                <Input />
-              </Form.Item>
-
-              <Form.Item
-                name="companyname"
-                label="Company Name"
-                rules={[
-                  { required: true, message: "Please input your company name!" },
-                ]}
-                className="w-full md:w-[48%]"
-              >
-                <Input />
+                <Select
+                  placeholder="Select Country"
+                  onChange={(value) => {
+                    setSelectedCountry(value);
+                    form.setFieldsValue({ state: undefined, city: undefined }); // reset state & city
+                  }}
+                >
+                  {Object.keys(countryData).map((country) => (
+                    <Select.Option key={country} value={country}>
+                      {country}
+                    </Select.Option>
+                  ))}
+                </Select>
               </Form.Item>
 
               <Form.Item
                 name="streetadress"
                 label="Street Address"
-                rules={[
-                  { required: true, message: "Please input your street address!" },
-                ]}
-                className="w-full md:w-[48%]"
+                className="w-full sm:w-full md:w-[48%]"
               >
                 <Input />
               </Form.Item>
@@ -197,62 +207,61 @@ const CheckOut = () => {
               <Form.Item
                 name="unit"
                 label="Apt, Suite, Unit"
-                rules={[
-                  { required: true, message: "Please input your unit!" },
-                ]}
-                className="w-full md:w-[48%]"
+                className="w-full sm:w-full md:w-[48%]"
               >
                 <Input />
+              </Form.Item>
+              <Form.Item
+                name="state"
+                label="State / Province"
+                rules={[{ required: true, message: "Please select a state" }]}
+                className="w-full sm:w-full md:w-[48%]"
+              >
+                <Select
+                  placeholder="Select State"
+                  disabled={!selectedCountry}
+                  onChange={(value) => {
+                    setSelectedState(value);
+                    form.setFieldsValue({ city: undefined }); // reset city
+                  }}
+                >
+                  {selectedCountry &&
+                    (countryData[selectedCountry].provinces || countryData[selectedCountry].states).map((state) => (
+                      <Select.Option key={state} value={state}>
+                        {state}
+                      </Select.Option>
+                    ))}
+                </Select>
               </Form.Item>
 
               <Form.Item
                 name="city"
                 label="City"
-                rules={[{ required: true, message: "Please input your city!" }]}
-                className="w-full md:w-[48%]"
+                rules={[{ required: true, message: "Please select a city" }]}
+                className="w-full sm:w-full md:w-[48%]"
               >
-                <Input />
-              </Form.Item>
-
-              <Form.Item
-                name="state"
-                label="State"
-                rules={[
-                  { required: true, message: "Please select your state!" },
-                ]}
-                className="w-full md:w-[48%]"
-              >
-                <Select
-                  placeholder="Select State"
-                  showSearch
-                  optionFilterProp="children"
-                  className="w-full"
-                  options={[
-                    { label: "Pakistan", value: "Pakistan" },
-                    { label: "India", value: "India" },
-                    { label: "Turkey", value: "Turkey" },
-                  ]}
-                />
-              </Form.Item>
-
-              <Form.Item
-                name="phone"
-                label="Phone"
-                rules={[
-                  { required: true, message: "Please input your phone number!" },
-                ]}
-                className="w-full md:w-[48%]"
-              >
-                <Input />
+                <Select placeholder="Select City" disabled={!selectedState}>
+                  {selectedState &&
+                    (countryData[selectedCountry].cities[selectedState] || []).map((city) => (
+                      <Select.Option key={city} value={city}>
+                        {city}
+                      </Select.Option>
+                    ))}
+                </Select>
               </Form.Item>
 
               <Form.Item
                 name="postalcode"
                 label="Postal Code"
-                rules={[
-                  { required: true, message: "Please input your postal code!" },
-                ]}
-                className="w-full md:w-[48%]"
+                className="w-full sm:w-full md:w-[48%]"
+              >
+                <Input />
+              </Form.Item>
+
+              <Form.Item
+                name="phone"
+                label="Phone"
+                className="w-full sm:w-full md:w-[48%]"
               >
                 <Input />
               </Form.Item>
@@ -260,32 +269,17 @@ const CheckOut = () => {
               <Form.Item
                 name="deliveryinstruction"
                 label="Delivery Instruction"
-                rules={[
-                  {
-                    required: true,
-                    message: "Please input delivery instruction!",
-                  },
-                ]}
                 className="w-full"
               >
                 <TextArea rows={4} />
               </Form.Item>
 
-              <Form.Item
-                name="remember"
-                valuePropName="checked"
-                className="w-full"
-              >
+              <Form.Item name="remember" valuePropName="checked" className="w-full">
                 <Checkbox>Set as default shipping address</Checkbox>
               </Form.Item>
 
               <Form.Item className="w-full">
-                <Button
-                  type="primary"
-                  htmlType="submit"
-                 loading={updating} // <-- Spinner here
-                  className="w-full"
-                >
+                <Button type="primary" htmlType="submit" loading={updating} className="w-full">
                   Update Information
                 </Button>
               </Form.Item>
@@ -294,7 +288,7 @@ const CheckOut = () => {
         )}
       </div>
 
-      {/* Order Summary */}
+      {/* ---------------- ORDER SUMMARY ---------------- */}
       <div className="w-full lg:w-[400px] bg-white p-6 rounded-xl shadow">
         <h2 className="text-xl font-semibold mb-4">Order Summary</h2>
 
@@ -303,25 +297,16 @@ const CheckOut = () => {
         ) : (
           <>
             <div className="space-y-4">
-              {productDetails.map((item) => (
-                <div
-                  key={item.productId || item._id}
-                  className="flex items-center justify-between"
-                >
+              {cartItems.map((item) => (
+                <div key={item._id} className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <img
-                      src={item.images}
-                      alt={item.title}
-                      className="w-16 h-16 rounded-lg object-cover"
-                    />
+                    <img src={item.images[0]} alt={item.title} className="w-16 h-16 rounded-lg object-cover" />
                     <div>
                       <h4 className="font-medium">{item.title}</h4>
-                      <p className="text-gray-500 text-sm">
-                        Color: {item.color || "N/A"} | Qty: {item.quantity}
-                      </p>
+                      <p className="text-gray-500 text-sm">Qty: {item.quantity}</p>
                     </div>
                   </div>
-                  <p className="font-semibold">${item.price}</p>
+                  <p className="font-semibold">${(item.price * item.quantity).toFixed(2)}</p>
                 </div>
               ))}
             </div>
@@ -345,8 +330,9 @@ const CheckOut = () => {
               type="primary"
               size="large"
               className="w-full mt-6"
-              onClick={startstripeCheckout}
-              loading={processingPayment} // <-- Spinner here
+              onClick={startStripeCheckout}
+              loading={processingPayment}
+              disabled={!infoUpdated} // ✅ disabled until user updates info
             >
               Proceed to Payment
             </Button>

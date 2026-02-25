@@ -1,5 +1,5 @@
 'use client';
-import React, { use } from "react";
+import React from "react";
 import FeedBackCard from "./FeedBackCard";
 import { Typography } from "antd";
 

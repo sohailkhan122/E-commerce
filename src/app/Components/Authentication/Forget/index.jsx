@@ -1,8 +1,8 @@
 "use client"
 import React, { useState } from "react";
 import { Button, Form, Input, message, Spin } from "antd";
-import axios from "axios";
 import { useRouter } from "next/navigation";
+import { forgotPassword } from "@/app/api/user";
 
 const ForgetPassword = () => {
   const [loading, setLoading] = useState(false);
@@ -13,12 +13,7 @@ const ForgetPassword = () => {
     setLoading(true);
 
     try {
-      // Call backend forgot-password API
-      await axios.post(
-        `${process.env.NEXT_PUBLIC_API_URL}/user/forgot-password`,
-        values
-      );
-
+      const data = await forgotPassword(values);
       // Success message
       message.success(
         "Password reset link sent to your email! Check your inbox."

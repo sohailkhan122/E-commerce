@@ -1,117 +1,115 @@
 "use client";
 import React, { useContext, useEffect, useState } from "react";
-import axios from "axios";
 import { Button, message, Skeleton, Typography } from "antd";
 import { useRouter } from "next/navigation";
 import noteContext from "@/context/noteContext";
+import { getCart, deleteFromCart, updateQuantity } from "@/app/api/cart";
 
 const CartPage = () => {
-  const { refresh, setRefresh } = useContext(noteContext);
+  const { setRefresh } = useContext(noteContext);
   const router = useRouter();
+
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState([]);
   const [total, setTotal] = useState(0);
-  const [userData, setUserData] = useState({});
   const [checkoutLoading, setCheckoutLoading] = useState(false);
 
   const shipping = 5.8;
 
+  // ✅ FETCH CART
   useEffect(() => {
-    const data = localStorage.getItem("userData");
-    if (data) setUserData(JSON.parse(data));
-  }, []);
-
-  useEffect(() => {
-    if (!userData._id) return;
-
     const fetchCart = async () => {
+      setLoading(true);
       try {
-        const res = await axios.get(
-          `${process.env.NEXT_PUBLIC_API_URL}/cart/getCartItem/${userData._id}`
-        );
+        const res = await getCart();
+        const cartItem = res.cartItem;
 
-        if (!res.data.cartItem) {
+        if (!cartItem || cartItem.products.length === 0) {
           setItems([]);
           setTotal(0);
           return;
         }
 
-        const qtyMap = {};
-        res.data.cartItem.products.forEach(
-          (p) => (qtyMap[p.productId] = p.quantity)
-        );
-
-        const products = await Promise.all(
-          res.data.cartItem.products.map((p) =>
-            axios.get(
-              `${process.env.NEXT_PUBLIC_API_URL}/product/getSingleProduct/${p.productId}`
-            )
-          )
-        );
-
-        const finalItems = products.map((r) => ({
-          ...r.data,
-          quantity: qtyMap[r.data._id],
-          subtotal: r.data.price * qtyMap[r.data._id],
+        const finalItems = cartItem.products.map((p) => ({
+          ...p.productId,
+          quantity: p.quantity,
+          subtotal: p.productId.price * p.quantity,
         }));
 
         setItems(finalItems);
-        setTotal(finalItems.reduce((a, b) => a + b.subtotal, 0));
-      } catch {
-        message.error("Cart load nahi ho saka");
+        setTotal(finalItems.reduce((acc, item) => acc + item.subtotal, 0));
+      } catch (err) {
+        throwerror("Failed to fetch cart");
       } finally {
         setLoading(false);
       }
     };
 
     fetchCart();
-  }, [userData._id, refresh]);
+  }, []);
 
-  const changeQty = (id, qty) => {
-    if (qty < 1) qty = 1;
-    const updated = items.map((i) =>
-      i._id === id ? { ...i, quantity: qty, subtotal: i.price * qty } : i
+  // ✅ UPDATE QUANTITY
+  const changeQty = async (id, qty) => {
+    if (qty < 1) return;
+
+    const updatedItems = items.map((item) =>
+      item._id === id ? { ...item, quantity: qty, subtotal: item.price * qty } : item
     );
-    setItems(updated);
-    setTotal(updated.reduce((a, b) => a + b.subtotal, 0));
-  };
 
-  const removeItem = async (id) => {
+    setItems(updatedItems);
+    setTotal(updatedItems.reduce((acc, item) => acc + item.subtotal, 0));
+
     try {
-      await axios.delete(
-        `${process.env.NEXT_PUBLIC_API_URL}/cart/deleteCartProducts/${id}/${userData._id}`
+      await updateQuantity({ productId: id, quantity: qty });
+    } catch (err) {
+      message.error("Quantity update failed");
+
+      // Rollback
+      const originalItems = items.map((item) =>
+        item._id === id
+          ? { ...item, quantity: item.quantity, subtotal: item.price * item.quantity }
+          : item
       );
-      message.success("Item removed");
-      setRefresh((p) => !p);
-    } catch {
-      message.error("Remove failed");
+      setItems(originalItems);
+      setTotal(originalItems.reduce((acc, item) => acc + item.subtotal, 0));
     }
   };
 
+  // ✅ REMOVE ITEM
+  const removeItem = async (productId) => {
+    const filteredItems = items.filter((item) => item._id !== productId);
+    setItems(filteredItems);
+    setTotal(filteredItems.reduce((acc, item) => acc + item.subtotal, 0));
+
+    try {
+      await deleteFromCart(productId);
+      message.success("Item removed");
+    } catch (err) {
+      message.error("Remove failed");
+      // Rollback
+      setItems(items);
+      setTotal(items.reduce((acc, item) => acc + item.subtotal, 0));
+    } finally {
+      setRefresh((prev) => !prev);
+    }
+  };
+
+  // ✅ CHECKOUT
   const checkout = async () => {
     try {
-      setCheckoutLoading(true);
-      await Promise.all(
-        items.map((i) =>
-          axios.put(
-            `${process.env.NEXT_PUBLIC_API_URL}/cart/updatequantiity/${userData._id}`,
-            { productId: i._id, quantity: i.quantity }
-          )
-        )
-      );
-      router.push("/check_out");
-    } catch {
+      setCheckoutLoading(true); // start loader
+      router.push("/check_out"); // navigation
+      // No need to setCheckoutLoading(false, loader stops automatically after navigation)
+    } catch (err) {
       message.error("Checkout failed");
-    } finally {
-      setCheckoutLoading(false);
+      setCheckoutLoading(false); // only stop loader if error occurs
     }
   };
 
-  /* EMPTY */
+  // ✅ EMPTY CART UI
   if (!loading && items.length === 0) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-6 px-4">
-        <img src="/Images/Frame 376.png" className="w-64" />
+      <div className="min-h-screen flex flex-col items-center justify-center gap-6">
         <h2 className="text-xl font-semibold">Your cart is empty</h2>
         <Button type="primary" onClick={() => router.push("/")}>
           Continue Shopping
@@ -121,118 +119,84 @@ const CartPage = () => {
   }
 
   return (
-    <>
-      <div className="max-w-7xl h-[80vh] mx-auto px-4 md:px-8 py-6 pb-28">
-        <div className="flex items-center gap-4 mb-6">
-          <img src="/Images/New Arrival Logo.png" alt="New Arrival Logo" className="h-8 w-auto" />
-          <Typography.Title level={3} className="text-2xl md:text-4xl m-0">
-            Shipping Cart
-          </Typography.Title>
-        </div>
+    <div className="min-h-screen max-w-7xl mx-auto px-4 py-6 pb-28">
+      <Typography.Title level={3}>Shopping Cart</Typography.Title>
 
-        {/* SKELETON LOADER */}
-        {loading ? (
-          <div className="space-y-4">
-            {[1, 2, 3].map((_, i) => (
-              <div key={i} className="bg-white border rounded-xl p-4 flex flex-col md:flex-row gap-4">
-                <Skeleton
-                  active
-                  avatar={{ size: 64, shape: "square" }}
-                  paragraph={{ rows: 2 }}
-                  className="flex-1"
+      {loading ? (
+        <Skeleton active />
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* CART ITEMS */}
+          <div className="lg:col-span-2 space-y-4">
+            {items.map((p) => (
+              <div key={p._id} className="border rounded-xl p-4 flex gap-4">
+                <img
+                  src={p.images[0]}
+                  className="w-24 h-24 object-cover rounded"
                 />
+                <div className="flex-1">
+                  <h3 className="font-semibold">{p.title}</h3>
+                  <p>${p.price.toFixed(2)}</p>
+                  <div className="flex gap-2 mt-2">
+                    <Button
+                      size="small"
+                      onClick={() => changeQty(p._id, p.quantity - 1)}
+                    >
+                      -
+                    </Button>
+                    <span>{p.quantity}</span>
+                    <Button
+                      size="small"
+                      onClick={() => changeQty(p._id, p.quantity + 1)}
+                    >
+                      +
+                    </Button>
+                  </div>
+                </div>
+                <div className="flex flex-col justify-between items-end">
+                  <p>${p.subtotal.toFixed(2)}</p>
+                  <button
+                    onClick={() => removeItem(p._id)}
+                    className="text-red-500 text-sm"
+                  >
+                    Remove
+                  </button>
+                </div>
               </div>
             ))}
           </div>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
-            {/* ITEMS */}
-            <div className="lg:col-span-2 space-y-4">
-              {items.map((p) => (
-                <div
-                  key={p._id}
-                  className="bg-white border rounded-xl p-4 flex gap-4"
-                >
-                  <img
-                    src={p.images}
-                    className="w-24 h-24 rounded-lg object-cover"
-                  />
+          {/* ORDER SUMMARY */}
+          <div className="bg-gray-100 p-6 rounded-xl h-fit">
+            <h2 className="text-xl font-semibold mb-4">Order Summary</h2>
 
-                  <div className="flex-1">
-                    <h3 className="font-semibold">{p.title}</h3>
-                    <p className="text-gray-500">${p.price}</p>
-
-                    <div className="flex items-center gap-3 mt-3">
-                      <Button size="small" onClick={() => changeQty(p._id, p.quantity - 1)}>-</Button>
-                      <span className="font-medium">{p.quantity}</span>
-                      <Button size="small" onClick={() => changeQty(p._id, p.quantity + 1)}>+</Button>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col justify-between items-end">
-                    <p className="font-semibold">${p.subtotal}</p>
-                    <button
-                      onClick={() => removeItem(p._id)}
-                      className="text-red-500 text-sm"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </div>
-              ))}
+            <div className="flex justify-between">
+              <span>Subtotal</span>
+              <span>${total.toFixed(2)}</span>
             </div>
 
-            {/* DESKTOP SUMMARY */}
-            <div className="hidden lg:block bg-gray-100 rounded-xl p-6 h-fit">
-              <h2 className="text-xl font-semibold mb-4">Order Summary</h2>
-
-              <div className="space-y-3">
-                <div className="flex justify-between">
-                  <span>Subtotal</span>
-                  <span>${total}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Shipping</span>
-                  <span>${shipping}</span>
-                </div>
-                <div className="flex justify-between font-bold text-lg">
-                  <span>Total</span>
-                  <span>${total + shipping}</span>
-                </div>
-              </div>
-
-              <Button
-                type="primary"
-                size="large"
-                className="w-full mt-6"
-                loading={checkoutLoading}
-                onClick={checkout}
-              >
-                Checkout
-              </Button>
+            <div className="flex justify-between">
+              <span>Shipping</span>
+              <span>${shipping.toFixed(2)}</span>
             </div>
-          </div>
-        )}
-      </div>
 
-      {/* MOBILE STICKY BAR */}
-      {!loading && items.length > 0 && (
-        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t px-4 py-3 flex justify-between items-center z-50">
-          <div>
-            <p className="text-sm text-gray-500">Total</p>
-            <p className="text-lg font-bold">${total + shipping}</p>
+            <div className="flex justify-between font-bold">
+              <span>Total</span>
+              <span>${(total + shipping).toFixed(2)}</span>
+            </div>
+
+            <Button
+              type="primary"
+              className="w-full mt-6"
+              loading={checkoutLoading} // ✅ AntD loader
+              onClick={checkout}
+            >
+              Checkout
+            </Button>
           </div>
-          <Button
-            type="primary"
-            loading={checkoutLoading}
-            onClick={checkout}
-          >
-            Checkout
-          </Button>
         </div>
       )}
-    </>
+    </div>
   );
 };
 

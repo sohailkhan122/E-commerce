@@ -2,7 +2,7 @@
 import React, { useState } from "react";
 import { Button, Form, Input, message, Spin } from "antd";
 import { useRouter } from "next/navigation";
-import axios from "axios";
+import { registerUser } from "@/app/api/user";
 
 const SignUp = () => {
   const [loading, setLoading] = useState(false);
@@ -10,16 +10,16 @@ const SignUp = () => {
 
   const onFinish = async (values) => {
     setLoading(true);
+
     try {
-      await axios.post(
-        `${process.env.NEXT_PUBLIC_API_URL}/user/register`,
-        values
-      );
-      message.success("Registration successful!");
+      const data = await registerUser(values);
+
+      message.success(data?.message || "Registration successful!");
       router.push("/login");
+
     } catch (error) {
       message.error(
-        error?.response?.data?.error || "Something went wrong"
+        error?.message || "Something went wrong"
       );
     } finally {
       setLoading(false);

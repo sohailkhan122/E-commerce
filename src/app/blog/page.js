@@ -5,7 +5,6 @@ import { Button, Tag } from "antd";
 const BlogPage = () => {
   const [blogs, setBlogs] = useState([]);
 
-  // Example static blog data, replace with API call if needed
   useEffect(() => {
     const blogData = [
       {

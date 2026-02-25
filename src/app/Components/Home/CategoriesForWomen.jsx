@@ -2,11 +2,11 @@
 import React, { useEffect, useState } from "react";
 import MainCard from "./Card";
 import { message, Typography, Skeleton, Card } from "antd";
-import axios from "axios";
 import Slider from "react-slick";
 import "slick-carousel/slick/slick.css";
 import "slick-carousel/slick/slick-theme.css";
 import { useRouter } from "next/navigation";
+import { getProductsByCategory } from "@/app/api/product";
 
 const CategoriesForWomen = () => {
   const router = useRouter();
@@ -14,20 +14,20 @@ const CategoriesForWomen = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchProductsByName = async () => {
+    const fetchProducts = async () => {
       try {
-        const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/product/productGetByName/${'Categories_For_Women'}`);
-        setProducts(response.data);
-        setLoading(false);
-      } catch (error) {
-        console.error('Error fetching products:', error);
-        message.error('Failed to fetch products');
+        setLoading(true);
+        const data = await getProductsByCategory("Women");
+        setProducts(data);
+      } catch (err) {
+        message.error(err.message || "Failed to fetch products");
       } finally {
         setLoading(false);
       }
     };
-    fetchProductsByName()
-  }, [])
+
+    fetchProducts();
+  }, []);
 
   const settings = {
     dots: false,

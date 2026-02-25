@@ -2,9 +2,9 @@
 import React, { useEffect, useState } from "react";
 import { Skeleton, Typography, Empty } from "antd";
 import ProductSidebar from "./ProductSidebar";
-import axios from "axios";
 import MainCard from "../Home/Card";
 import { useRouter } from "next/navigation";
+import { getProductsByCategory } from "@/app/api/product";
 
 const { Title } = Typography;
 
@@ -21,16 +21,16 @@ const ProductCategoryList = ({ route }) => {
       try {
         let categorySlug = "";
         switch (route.category) {
-          case "women":
-            categorySlug = "Categories_For_Women";
+          case "Women":
+            categorySlug = "Women";
             setCategory("Women's Clothing");
             break;
-          case "men":
-            categorySlug = "Categories_For_Men";
+          case "Men":
+            categorySlug = "Men";
             setCategory("Men's Clothing");
             break;
-          case "joggers":
-            categorySlug = "joggers";
+          case "Shoes":
+            categorySlug = "Shoes";
             setCategory("Jogger's Shoes");
             break;
           default:
@@ -38,11 +38,9 @@ const ProductCategoryList = ({ route }) => {
             break;
         }
 
-        const response = await axios.get(
-          `${process.env.NEXT_PUBLIC_API_URL}/product/productGetByName/${categorySlug}`,
-        );
-        setProducts(response.data);
-        setOriginalProducts(response.data);
+        const response = await getProductsByCategory(categorySlug);
+        setProducts(response);
+        setOriginalProducts(response);
       } catch (error) {
         console.error("Error fetching products:", error);
       } finally {

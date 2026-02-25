@@ -12,23 +12,31 @@ const ProductSidebar = ({ route, selectedFilter, handleFilter }) => {
     const [open, setOpen] = useState(false);
 
     const joggersMenu = [
-        { key: "snackers", label: "Snackers" },
-        { key: "joggers", label: "Joggers" },
-        { key: "normalshoes", label: "Normal Shoes" },
+        { key: "Sneakers", label: "Sneakers" },
+        { key: "Boots", label: "Boots" },
+        { key: "Heels", label: "Heels" },
+        { key: "Sandals", label: "Sandals" },
     ];
 
     const defaultMenu = [
         { key: "", label: "All Products" },
-        { key: "tops", label: "Tops" },
-        { key: "printed_t_shirt", label: "Printed T-shirts" },
-        { key: "plain_t_shirt", label: "Plain T-shirts" },
-        { key: "kurti", label: "Kurti" },
-        { key: "full_sleeve_t_shirt", label: "Full sleeve T-shirts" },
-        { key: "jeans", label: "Jeans" },
+        { key: "Tops", label: "Tops" },
+        { key: "PrintedT-Shirt", label: "Printed T-shirts" },
+        { key: "PlainT-Shirt", label: "Plain T-shirts" },
+        { key: "Kurti", label: "Kurti" },
+        { key: "Trousers", label: "Trousers" },
+        { key: "Jeans", label: "Jeans" },
+        { key: "Shorts", label: "Shorts" },
+        { key: "Skirts", label: "Skirts" },
+        { key: "Dresses", label: "Dresses" },
+        { key: "Jumpsuits", label: "Jumpsuits" },
+        { key: "Bags", label: "Bags" },
+        { key: "Watches", label: "Watches" },
+        { key: "Jewelry", label: "Jewelry" },
     ];
 
     const menuItems =
-        route.category === "joggers" ? joggersMenu : defaultMenu;
+        route.category === "Shoes" ? joggersMenu : defaultMenu;
 
     const SidebarContent = (
         <div className="flex flex-col gap-4">

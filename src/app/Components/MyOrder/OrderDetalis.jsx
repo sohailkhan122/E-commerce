@@ -1,59 +1,13 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { Typography, Card, Button, Skeleton, Divider, Tag } from "antd";
-import axios from "axios";
-import { useRouter } from "next/navigation";
+import React from "react";
+import { Typography, Card, Button, Divider, Tag } from "antd";
+
 import OrderProductCard from "./OrderProductCard";
 
 const { Title, Text } = Typography;
 
-const OrderDetails = ({ selectedOrderveiwId, setValue }) => {
-  const [order, setOrder] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  const router = useRouter();
-
-  const userId =
-    typeof window !== "undefined"
-      ? JSON.parse(localStorage.getItem("userData"))?._id
-      : null;
-
-  useEffect(() => {
-    if (!selectedOrderveiwId || !userId) return;
-
-    const fetchOrder = async () => {
-      try {
-        setLoading(true);
-        const res = await axios.get(
-          `${process.env.NEXT_PUBLIC_API_URL}/order/getOrdersByUserId/${userId}`
-        );
-
-        if (res.data.success) {
-          const selected = res.data.orders.find(
-            (o) => o._id === selectedOrderveiwId
-          );
-          setOrder(selected || null);
-        }
-      } catch (error) {
-        console.error(error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchOrder();
-  }, [selectedOrderveiwId, userId]);
-
-  /* ================= LOADING ================= */
-  if (loading) {
-    return (
-      <div className="p-4 max-w-5xl mx-auto">
-        <Skeleton active paragraph={{ rows: 6 }} />
-      </div>
-    );
-  }
-
+const OrderDetails = ({ order, setValue }) => {
   /* ================= NO ORDER ================= */
   if (!order) {
     return (
@@ -88,7 +42,7 @@ const OrderDetails = ({ selectedOrderveiwId, setValue }) => {
             }
             className="w-fit"
           >
-            {order.status.toUpperCase()}
+            {order.payment.status}
           </Tag>
         </div>
       </Card>
@@ -110,7 +64,7 @@ const OrderDetails = ({ selectedOrderveiwId, setValue }) => {
 
           <div>
             <Text type="secondary">Payment Method</Text>
-            <Title level={5}>{order.paymentMethod || "N/A"}</Title>
+            <Title level={5}>{order.payment.status || "N/A"}</Title>
           </div>
         </div>
       </Card>
@@ -124,7 +78,7 @@ const OrderDetails = ({ selectedOrderveiwId, setValue }) => {
         <Divider className="!my-3" />
 
         <div className="flex flex-col gap-4">
-          {order.productDetails?.map((item) => (
+          {order.products?.map((item) => (
             <OrderProductCard
               key={item._id}
               items={item}

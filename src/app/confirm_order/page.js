@@ -1,114 +1,77 @@
-'use client'
-import axios from 'axios';
-import { useRouter } from 'next/navigation';
+'use client';
 import { useContext, useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Button, Result, Skeleton } from 'antd';
+import { payment } from '../api/payment';
 import noteContext from '@/context/noteContext';
 
 const Page = () => {
-  const [productDetails, setProductDetails] = useState([]);
-  const { refresh, setRefresh } = useContext(noteContext);
-  const [loading, setLoading] = useState(true);
-  const [total, setTotal] = useState(0);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const session_id = searchParams.get('session_id');
+  const { setRefresh } = useContext(noteContext);
 
-  const userId =
-    typeof window !== "undefined"
-      ? JSON.parse(localStorage.getItem("userData"))?._id
-      : null;
+  const [loading, setLoading] = useState(true);
+  const [paymentData, setPaymentData] = useState(null);
+  const [error, setError] = useState(false);
 
-  // Fetch cart products
   useEffect(() => {
-    if (!userId) return;
+    if (!session_id) return;
 
-    const fetchData = async () => {
+    const fetchPayment = async () => {
       try {
-        const response = await axios.get(
-          `${process.env.NEXT_PUBLIC_API_URL}/cart/getCartItem/${userId}`
-        );
-        const { products } = response.data.cartItem || {};
-
-        if (!products || products.length === 0) {
-          setLoading(false);
-          return;
-        }
-
-        const productDetailPromises = products.map(async (product) => {
-          const productDetailResponse = await axios.get(
-            `${process.env.NEXT_PUBLIC_API_URL}/product/getSingleProduct/${product.productId}`
-          );
-          return { ...product, ...productDetailResponse.data };
-        });
-
-        const productDetails = await Promise.all(productDetailPromises);
-
-        // Calculate total
-        const totalAmount = productDetails.reduce(
-          (sum, item) => sum + item.price * item.quantity,
-          0
-        );
-
-        setProductDetails(productDetails);
-        setTotal(totalAmount);
-      } catch (error) {
-        console.error("Error fetching data:", error);
+        const res = await payment(session_id);
+        setRefresh(prev => !prev); // Trigger global refresh to update cart/wishlist
+        setPaymentData(res);
+      } catch (err) {
+        console.error(err);
+        setError(true);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchData();
-  }, [userId, router]);
+    fetchPayment();
+  }, [session_id]);
 
-  // Trigger order API automatically when productDetails are ready
-  useEffect(() => {
-    if (productDetails.length === 0 || !total) return;
+  if (loading) {
+    return (
+      <div className="w-full min-h-screen flex items-center justify-center">
+        <div className="w-full max-w-md p-6">
+          <Skeleton active paragraph={{ rows: 4 }} />
+        </div>
+      </div>
+    );
+  }
 
-    const createOrder = async () => {
-      try {
-        const response = await axios.post(
-          `${process.env.NEXT_PUBLIC_API_URL}/order/createOrder`,
-          {
-            userId,
-            productDetails,
-            total,
-          }
-        );
-        console.log("Order created:", response.data);
-        setRefresh(!refresh);
-      } catch (error) {
-        console.error("Error creating order:", error);
-      }
-    };
-
-    createOrder();
-  }, [productDetails, total, userId, router]);
+  if (error || !paymentData) {
+    return (
+      <div className="w-full min-h-screen flex items-center justify-center">
+        <Result
+          status="error"
+          title="Payment Verification Failed"
+          extra={[
+            <Button type="primary" key="home" onClick={() => router.push('/')}>
+              Go Home
+            </Button>,
+          ]}
+        />
+      </div>
+    );
+  }
 
   return (
-    <div className="w-full min-h-screen flex items-center justify-center px-4 py-10">
-      {loading ? (
-        // Skeleton Loading while fetching data
-        <div className="w-full max-w-md">
-          <Skeleton.Image active className="!w-full !h-60 !rounded-xl" />
-          <Skeleton active paragraph={{ rows: 3 }} className="mt-6" />
-        </div>
-      ) : (
-        <div className="w-full max-w-md text-center">
-          <Result
-            status="success"
-            title="Order Confirmed Successfully!"
-            extra={[
-              <Button
-                type="primary"
-                key="home"
-                onClick={() => router.push("/")}
-              >
-                Go Home
-              </Button>,
-            ]}
-          />
-        </div>
-      )}
+    <div className="w-full min-h-screen flex items-center justify-center">
+      <Result
+        status="success"
+        title="Payment Successful 🎉"
+        subTitle={`Transaction ID: ${paymentData.id}`}
+        extra={[
+          <Button type="primary" key="home" onClick={() => router.push('/')}>
+            Go Home
+          </Button>,
+        ]}
+      />
     </div>
   );
 };

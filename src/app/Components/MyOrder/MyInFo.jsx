@@ -2,40 +2,54 @@
 import React, { useEffect, useState } from "react";
 import { Button, Checkbox, Form, Input, Select, message, Skeleton } from "antd";
 import TextArea from "antd/es/input/TextArea";
-import axios from "axios";
+import { getCurrentUser, updateUser } from "@/app/api/user";
 
 const MyInfo = () => {
-    const userId =
-        typeof window !== "undefined"
-            ? JSON.parse(localStorage.getItem("userData"))._id
-            : null;
     const [loading, setLoading] = useState(false);
-    const [userData, setUserData] = useState(null);
     const [showForm, setShowForm] = useState(false);
+    const [userData, setUserData] = useState(null);
+    const [selectedCountry, setSelectedCountry] = useState(null);
+    const [selectedState, setSelectedState] = useState(null);
+    const [form] = Form.useForm();
+
+    const countryData = {
+        Pakistan: {
+            provinces: ["Punjab", "Sindh", "Khyber Pakhtunkhwa", "Balochistan"],
+            cities: {
+                Punjab: ["Lahore", "Faisalabad", "Rawalpindi"],
+                Sindh: ["Karachi", "Hyderabad", "Sukkur"],
+                "Khyber Pakhtunkhwa": ["Peshawar", "Abbottabad", "Mardan"],
+                Balochistan: ["Quetta", "Gwadar", "Sibi"],
+            },
+        },
+        USA: {
+            states: ["California", "Texas", "New York", "Florida"],
+            cities: {
+                California: ["Los Angeles", "San Francisco", "San Diego"],
+                Texas: ["Houston", "Dallas", "Austin"],
+                "New York": ["New York City", "Buffalo", "Rochester"],
+                Florida: ["Miami", "Orlando", "Tampa"],
+            },
+        },
+    };
 
 
     useEffect(() => {
-        if (!userId) return;
-        const getUserById = async () => {
+        const getUser = async () => {
             try {
-                const response = await axios.get(
-                    `${process.env.NEXT_PUBLIC_API_URL}/user/getUserById/${userId}`
-                );
-                setUserData(response.data);
+                const res = await getCurrentUser();
+                setUserData(res.user);
             } catch (error) {
                 console.error("Error fetching user by ID:", error);
             }
         };
-        getUserById();
-    }, [userId]);
+        getUser();
+    }, []);
 
     const onFinish = async (values) => {
         try {
             setLoading(true);
-            await axios.put(
-                `${process.env.NEXT_PUBLIC_API_URL}/user/updateUser/${userId}`,
-                values
-            );
+            const res = await updateUser(values);
             message.success("User information updated successfully");
             setShowForm(false); // hide form after update
             setUserData({ ...userData, ...values }); // update displayed info
@@ -108,23 +122,23 @@ const MyInfo = () => {
                     </Form.Item>
                     <Form.Item
                         name="region"
-                        label="Country / Region"
-                        rules={[
-                            { required: true, message: "Please input your region!" },
-                        ]}
-                        className="w-full md:w-[48%]"
+                        label="Country"
+                        rules={[{ required: true, message: "Please select a country" }]}
+                        className="w-full sm:w-full md:w-[48%]"
                     >
-                        <Input />
-                    </Form.Item>
-                    <Form.Item
-                        name="companyname"
-                        label="Company Name"
-                        rules={[
-                            { required: true, message: "Please input your company name!" },
-                        ]}
-                        className="w-full md:w-[48%]"
-                    >
-                        <Input />
+                        <Select
+                            placeholder="Select Country"
+                            onChange={(value) => {
+                                setSelectedCountry(value);
+                                form.setFieldsValue({ state: undefined, city: undefined }); // reset state & city
+                            }}
+                        >
+                            {Object.keys(countryData).map((country) => (
+                                <Select.Option key={country} value={country}>
+                                    {country}
+                                </Select.Option>
+                            ))}
+                        </Select>
                     </Form.Item>
                     <Form.Item
                         name="streetadress"
@@ -147,32 +161,41 @@ const MyInfo = () => {
                         <Input />
                     </Form.Item>
                     <Form.Item
-                        name="city"
-                        label="City"
-                        rules={[{ required: true, message: "Please input your city!" }]}
-                        className="w-full md:w-[48%]"
-                    >
-                        <Input />
-                    </Form.Item>
-                    <Form.Item
                         name="state"
-                        label="State"
-                        rules={[
-                            { required: true, message: "Please select your state!" },
-                        ]}
-                        className="w-full md:w-[48%]"
+                        label="State / Province"
+                        rules={[{ required: true, message: "Please select a state" }]}
+                        className="w-full sm:w-full md:w-[48%]"
                     >
                         <Select
                             placeholder="Select State"
-                            showSearch
-                            optionFilterProp="children"
-                            className="w-full"
-                            options={[
-                                { label: "Pakistan", value: "Pakistan" },
-                                { label: "India", value: "India" },
-                                { label: "Turkey", value: "Turkey" },
-                            ]}
-                        />
+                            disabled={!selectedCountry}
+                            onChange={(value) => {
+                                setSelectedState(value);
+                                form.setFieldsValue({ city: undefined }); // reset city
+                            }}
+                        >
+                            {selectedCountry &&
+                                (countryData[selectedCountry].provinces || countryData[selectedCountry].states).map((state) => (
+                                    <Select.Option key={state} value={state}>
+                                        {state}
+                                    </Select.Option>
+                                ))}
+                        </Select>
+                    </Form.Item>
+                    <Form.Item
+                        name="city"
+                        label="City"
+                        rules={[{ required: true, message: "Please select a city" }]}
+                        className="w-full sm:w-full md:w-[48%]"
+                    >
+                        <Select placeholder="Select City" disabled={!selectedState}>
+                            {selectedState &&
+                                (countryData[selectedCountry].cities[selectedState] || []).map((city) => (
+                                    <Select.Option key={city} value={city}>
+                                        {city}
+                                    </Select.Option>
+                                ))}
+                        </Select>
                     </Form.Item>
                     <Form.Item
                         name="phone"

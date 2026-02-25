@@ -1,6 +1,6 @@
 "use client";
 import React, { useState } from "react";
-import { Button } from "antd";
+import { Button, message } from "antd";
 import {
   IdcardOutlined,
   LogoutOutlined,
@@ -9,17 +9,23 @@ import {
 import OrdersOwn from "./OrdersOwn";
 import OrderDetalis from "./OrderDetalis";
 import MyInFo from "./MyInFo";
+import { logoutUser } from "@/app/api/user";
 import { useRouter } from "next/navigation";
 
 const MyOrder = () => {
   const [value, setValue] = useState("Myorders");
-  const [selectedOrderveiwId, setSelectedOrderveiwId] = useState(null);
+  const [order, setorder] = useState([{}]);
   const router = useRouter();
 
-  const handleLogOutClick = () => {
-    if (typeof window !== "undefined") {
-      localStorage.clear();
+  const handleLogOutClick = async () => {
+    try {
+      const res = await logoutUser();
+      console.log("Logout response:", res);
+      message.success("Logged out successfully");
       router.push("/login");
+    } catch (error) {
+      console.log("Logout error:", error);
+      message.error("Logout failed");
     }
   };
 
@@ -75,8 +81,8 @@ const MyOrder = () => {
       {/* Content */}
       <div className="flex-1 p-4 md:p-8">
         {value === "myInfo" && <MyInFo />}
-        {value === "Myorders" && <OrdersOwn setSelectedOrderveiwId={setSelectedOrderveiwId} setValue={setValue} />}
-        {value === "OrdersDetails" && <OrderDetalis selectedOrderveiwId={selectedOrderveiwId} />}
+        {value === "Myorders" && <OrdersOwn setorder={setorder} setValue={setValue} />}
+        {value === "OrdersDetails" && <OrderDetalis order={order} />}
       </div>
     </div>
   );

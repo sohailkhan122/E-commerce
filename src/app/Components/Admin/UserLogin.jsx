@@ -1,83 +1,50 @@
 'use client'
 import React, { useEffect, useState } from 'react';
 import { Table } from 'antd';
-import axios from 'axios';
+import { getAllUsers } from '@/app/api/user';
 
 const UserLogin = () => {
     const [users, setUsers] = useState([]);
+    const [loading, setLoading] = useState(true); // ✅ optional loading state
 
     useEffect(() => {
         const fetchAllUsers = async () => {
             try {
-                const response = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/user/getAllUsers`);
-                setUsers(response.data.data)
+                const response = await getAllUsers();
+                const filteredUsers = response.filter(user => !user.isAdmin);
+                setUsers(filteredUsers); // or response.data depending on your API
             } catch (error) {
                 console.error('Failed to fetch users:', error);
+            } finally {
+                setLoading(false);
             }
         };
+
         fetchAllUsers();
-    }, [users]);
+    }, []);
 
     const columns = [
-        {
-            title: 'UserID',
-            dataIndex: '_id',
-            key: '_id',
-        },
-        {
-            title: 'Name',
-            dataIndex: 'name',
-            key: 'name',
-        },
-        {
-            title: 'Last Name',
-            dataIndex: 'lastname',
-            key: 'lastname',
-        },
-        {
-            title: 'Email',
-            dataIndex: 'email',
-            key: 'email',
-        },
-        {
-            title: 'Region',
-            dataIndex: 'region',
-            key: 'region',
-        },
-        {
-            title: 'Company Name',
-            dataIndex: 'companyname',
-            key: 'companyname',
-        },
-        {
-            title: 'Street Adress',
-            dataIndex: 'streetadress',
-            key: 'streetadress',
-        },
-        {
-            title: 'City',
-            dataIndex: 'city',
-            key: 'city',
-        },
-        {
-            title: 'State',
-            dataIndex: 'state',
-            key: 'state',
-        },
-        {
-            title: 'Phone',
-            dataIndex: 'phone',
-            key: 'phone',
-        },
-        {
-            title: 'Postal Code',
-            dataIndex: 'postalcode',
-            key: 'postalcode',
-        },
+        { title: 'Name', dataIndex: 'name', key: 'name', align: 'left' },
+        { title: 'Email', dataIndex: 'email', key: 'email', align: 'left' },
+        { title: 'Last Name', dataIndex: 'lastname', key: 'lastname', align: 'left' },
+        { title: 'Region', dataIndex: 'region', key: 'region', align: 'center' },
+        { title: 'Company Name', dataIndex: 'companyname', key: 'companyname', align: 'left' },
+        { title: 'Street Address', dataIndex: 'streetadress', key: 'streetadress', align: 'left' },
+        { title: 'City', dataIndex: 'city', key: 'city', align: 'center' },
+        { title: 'State', dataIndex: 'state', key: 'state', align: 'center' },
+        { title: 'Phone', dataIndex: 'phone', key: 'phone', align: 'center' },
+        { title: 'Postal Code', dataIndex: 'postalcode', key: 'postalcode', align: 'center' },
     ];
 
     return (
-        <Table columns={columns} dataSource={users} rowKey="_id" />
+        <Table
+            columns={columns}
+            dataSource={users}
+            rowKey="_id"
+            loading={loading} // shows spinner while fetching
+            scroll={{ x: 'max-content' }} // ✅ horizontal scroll for responsiveness
+            bordered
+        />
     );
 };
 

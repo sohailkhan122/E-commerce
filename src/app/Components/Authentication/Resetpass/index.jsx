@@ -14,14 +14,12 @@ const ResetPassword = ({ token }) => {
     if (password !== confirmPassword) {
       return message.error("Passwords do not match");
     }
-
     setLoading(true);
     try {
       await axios.put(
         `${process.env.NEXT_PUBLIC_API_URL}/user/reset-password/${token}`,
         { password }
       );
-
       message.success("Password reset successfully! Redirecting to login...");
 
       setTimeout(() => {

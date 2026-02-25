@@ -10,61 +10,59 @@ import {
   message,
 } from "antd";
 import { ShoppingCartOutlined } from "@ant-design/icons";
-import axios from "axios";
+import { useParams, useRouter } from "next/navigation";
 import noteContext from "@/context/noteContext";
-import { useRouter } from "next/navigation";
+import { addToCart } from "@/app/api/cart";
+import { getProductById } from "@/app/api/product"; // ✅ IMPORT ADDED
 
-const ProductDetails = ({ route }) => {
-  const { setRefresh, userId } = useContext(noteContext);
-  const router = useRouter();
-
+const ProductDetails = () => {
+  const { id } = useParams(); // ✅ Correct way in Next.js
+  const { setRefresh } = useContext(noteContext);
+  const router = useRouter();// ✅ Debugging log
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
   const [size, setSize] = useState(null);
   const [color, setColor] = useState(null);
   const [adding, setAdding] = useState(false);
 
+  // ✅ Fetch Product
   useEffect(() => {
+    if (!id) return;
+
     const fetchProduct = async () => {
       try {
-        const res = await axios.get(
-          `${process.env.NEXT_PUBLIC_API_URL}/product/getSingleProduct/${route?.id}`
-        );
-        setProduct(res.data);
-      } catch {
-        message.error("Failed to Load Product");
+        setLoading(true);
+        const res = await getProductById(id);
+        setProduct(res);
+      } catch (err) {
+        message.error(err.message || "Failed to load product details");
       } finally {
         setLoading(false);
       }
     };
-    fetchProduct();
-  }, [route]);
 
-  const addToCart = async () => {
-    if (!size) return message.warning("Please Select A Size");
-    if (!color) return message.warning("Please Selecta A Color");
+    fetchProduct();
+  }, [id]);
+
+  // ✅ Add To Cart
+  const handleAddToCart = async () => {
+    if (!size) return message.warning("Please select a size");
+    if (!color) return message.warning("Please select a color");
 
     try {
       setAdding(true);
-      await axios.post(
-        `${process.env.NEXT_PUBLIC_API_URL}/cart/addToCart`,
-        {
-          productId: product._id,
-          size,
-          color,
-          userId,
-        }
-      );
-      message.success("Product Added To Cart Successfully");
-      setRefresh((p) => !p);
-    } catch {
-      message.error("Product Not Added To Cart");
+      await addToCart({ productId: product._id, size, color });
+      setRefresh((prev) => !prev);
+      message.success("Product added to cart successfully");
+    } catch (err) {
+      message.error(err.message || "Failed to add product to cart");
     } finally {
       setAdding(false);
     }
   };
 
-  if (loading) {
+  // ✅ Loading UI
+  if (loading || !product) {
     return (
       <div className="max-w-6xl mx-auto p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
         <Skeleton.Image active className="w-full h-[420px]" />
@@ -81,7 +79,7 @@ const ProductDetails = ({ route }) => {
           {/* PRODUCT IMAGE */}
           <Card bordered={false}>
             <img
-              src={product.images}
+              src={Array.isArray(product.images) ? product.images[0] : product.images}
               alt={product.title}
               className="w-full h-[420px] object-cover rounded-md"
             />
@@ -120,9 +118,7 @@ const ProductDetails = ({ route }) => {
                   <div
                     key={c}
                     onClick={() => setColor(c)}
-                    className={`w-9 h-9 rounded-full cursor-pointer border-2 ${color === c
-                      ? "border-purple-600"
-                      : "border-gray-300"
+                    className={`w-9 h-9 rounded-full cursor-pointer border-2 ${color === c ? "border-purple-600" : "border-gray-300"
                       }`}
                     style={{ backgroundColor: c }}
                   />
@@ -130,18 +126,20 @@ const ProductDetails = ({ route }) => {
               </div>
             </div>
 
-            {/* DESKTOP ACTIONS */}
+            {/* DESKTOP BUTTONS */}
             <div className="hidden sm:flex gap-3">
               <Button
                 type="primary"
                 size="large"
                 icon={<ShoppingCartOutlined />}
                 loading={adding}
-                onClick={addToCart}
+                onClick={handleAddToCart}
               >
                 Add to Cart
               </Button>
-              <Button size="large" onClick={() => router.push("/cart_page")}>Go to Cart</Button>
+              <Button size="large" onClick={() => router.push("/cart_page")}>
+                Go to Cart
+              </Button>
             </div>
           </div>
         </div>
@@ -172,7 +170,7 @@ const ProductDetails = ({ route }) => {
           type="primary"
           icon={<ShoppingCartOutlined />}
           loading={adding}
-          onClick={addToCart}
+          onClick={handleAddToCart}
         >
           Add to Cart
         </Button>
