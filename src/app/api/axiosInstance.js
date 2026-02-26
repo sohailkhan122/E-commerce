@@ -47,7 +47,7 @@ api.interceptors.response.use(
 
       try {
         // 4️⃣ Call your refresh token endpoint
-        await api.post("process.env.NEXT_PUBLIC_API_URL/user/refresh"); // your backend sets new access token in cookie
+        await api.post(`${process.env.NEXT_PUBLIC_API_URL}/user/refresh`); // your backend sets new access token in cookie
         isRefreshing = false;
 
         processQueue(null); // retry all queued requests

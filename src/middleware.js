@@ -4,9 +4,20 @@ export function middleware(request) {
   const { pathname } = request.nextUrl;
   const accessToken = request.cookies.get("accessToken")?.value;
 
+  // ✅ Public routes ( "/" public hi rahe ga )
   const publicRoutes = ["/", "/login", "/register", "/forget_password"];
 
-  // 🔓 1️⃣ Logged-in user trying auth pages
+  // 🔒 Secure routes
+  const secureRoutes = [
+    "/wishlist",
+    "/cart_page",
+    "/check_out",
+    "/my_order",
+    "/product_details",
+    "/admin",
+  ];
+
+  // 🔁 Logged-in user auth pages par na ja sake
   if (
     accessToken &&
     ["/login", "/register", "/forget_password"].includes(pathname)
@@ -14,45 +25,41 @@ export function middleware(request) {
     return NextResponse.redirect(new URL("/", request.url));
   }
 
-  // 🔓 2️⃣ Public routes allowed
+  // 🔓 Public routes allow
   if (publicRoutes.includes(pathname)) {
     return NextResponse.next();
   }
 
-  // 🔐 3️⃣ Protected route without token
-  if (!accessToken) {
+  // 🔐 Secure routes → login required
+  const isSecureRoute = secureRoutes.some((route) =>
+    pathname.startsWith(route)
+  );
+
+  if (isSecureRoute && !accessToken) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  // 🔐 4️⃣ Token exists → decode & admin check
-  try {
-    const base64Payload = accessToken.split(".")[1];
-    const payload = JSON.parse(atob(base64Payload)); // ✅ Buffer removed
+  // 🔐 Token check + admin check
+  if (accessToken) {
+    try {
+      const payload = JSON.parse(atob(accessToken.split(".")[1]));
 
-    // 🔒 Admin route protection
-    if (pathname.startsWith("/admin") && !payload.isAdmin) {
-      return NextResponse.redirect(new URL("/", request.url));
+      // Admin protection
+      if (pathname.startsWith("/admin") && !payload.isAdmin) {
+        return NextResponse.redirect(new URL("/", request.url));
+      }
+
+      return NextResponse.next();
+    } catch {
+      const res = NextResponse.redirect(new URL("/login", request.url));
+      res.cookies.delete("accessToken");
+      return res;
     }
-
-    return NextResponse.next();
-  } catch (error) {
-    // ❌ Invalid / expired token
-    const res = NextResponse.redirect(new URL("/login", request.url));
-    res.cookies.delete("accessToken");
-    return res;
   }
+
+  return NextResponse.next();
 }
 
 export const config = {
-  matcher: [
-    "/wishlist/:path*",
-    "/admin/:path*",
-    "/product_details/:path*",
-    "/cart_page/:path*",
-    "/check_out/:path*",
-    "/my_order/:path*",
-    "/login",
-    "/register",
-    "/forget_password",
-  ],
+  matcher: ["/((?!_next|api|favicon.ico).*)"],
 };
