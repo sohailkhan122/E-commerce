@@ -6,7 +6,7 @@ export function middleware(request) {
 
   const publicRoutes = ["/", "/login", "/register", "/forget_password"];
 
-  // 🔓 1️⃣ If user is logged in and tries to access auth pages
+  // 🔓 1️⃣ Logged-in user trying auth pages
   if (
     accessToken &&
     ["/login", "/register", "/forget_password"].includes(pathname)
@@ -14,29 +14,29 @@ export function middleware(request) {
     return NextResponse.redirect(new URL("/", request.url));
   }
 
-  // 🔓 2️⃣ If route is public → allow
+  // 🔓 2️⃣ Public routes allowed
   if (publicRoutes.includes(pathname)) {
     return NextResponse.next();
   }
 
-  // 🔐 3️⃣ If no token and route is protected → redirect to login
+  // 🔐 3️⃣ Protected route without token
   if (!accessToken) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  // 🔐 4️⃣ If token exists → validate & check admin
+  // 🔐 4️⃣ Token exists → decode & admin check
   try {
-    const payload = JSON.parse(
-      Buffer.from(accessToken.split(".")[1], "base64").toString()
-    );
+    const base64Payload = accessToken.split(".")[1];
+    const payload = JSON.parse(atob(base64Payload)); // ✅ Buffer removed
 
-    // Admin route protection
+    // 🔒 Admin route protection
     if (pathname.startsWith("/admin") && !payload.isAdmin) {
       return NextResponse.redirect(new URL("/", request.url));
     }
 
     return NextResponse.next();
-  } catch (err) {
+  } catch (error) {
+    // ❌ Invalid / expired token
     const res = NextResponse.redirect(new URL("/login", request.url));
     res.cookies.delete("accessToken");
     return res;
