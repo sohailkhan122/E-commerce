@@ -4,10 +4,7 @@ export function middleware(request) {
   const { pathname } = request.nextUrl;
   const accessToken = request.cookies.get("accessToken")?.value;
 
-  // ✅ Public routes ( "/" public hi rahe ga )
   const publicRoutes = ["/", "/login", "/register", "/forget_password"];
-
-  // 🔒 Secure routes
   const secureRoutes = [
     "/wishlist",
     "/cart_page",
@@ -18,10 +15,7 @@ export function middleware(request) {
   ];
 
   // 🔁 Logged-in user auth pages par na ja sake
-  if (
-    accessToken &&
-    ["/login", "/register", "/forget_password"].includes(pathname)
-  ) {
+  if (accessToken && ["/login", "/register", "/forget_password"].includes(pathname)) {
     return NextResponse.redirect(new URL("/", request.url));
   }
 
@@ -31,10 +25,7 @@ export function middleware(request) {
   }
 
   // 🔐 Secure routes → login required
-  const isSecureRoute = secureRoutes.some((route) =>
-    pathname.startsWith(route)
-  );
-
+  const isSecureRoute = secureRoutes.some((route) => pathname.startsWith(route));
   if (isSecureRoute && !accessToken) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
@@ -42,7 +33,10 @@ export function middleware(request) {
   // 🔐 Token check + admin check
   if (accessToken) {
     try {
-      const payload = JSON.parse(atob(accessToken.split(".")[1]));
+      // ✅ Edge-safe JWT decode
+      const base64Url = accessToken.split(".")[1];
+      const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+      const payload = JSON.parse(Buffer.from(base64, "base64").toString("utf-8"));
 
       // Admin protection
       if (pathname.startsWith("/admin") && !payload.isAdmin) {
@@ -50,9 +44,10 @@ export function middleware(request) {
       }
 
       return NextResponse.next();
-    } catch {
+    } catch (err) {
       const res = NextResponse.redirect(new URL("/login", request.url));
       res.cookies.delete("accessToken");
+      res.cookies.delete("refreshToken");
       return res;
     }
   }
