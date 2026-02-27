@@ -1,8 +1,16 @@
 import axios from "axios";
 
 // 1️⃣ Create axios instance
+// In the browser, use the /proxy route (same-domain) so that cookies set by
+// the backend are stored on the frontend domain and the middleware can read them.
+// On the server (SSR/middleware), call the backend directly.
+const baseURL =
+  typeof window !== "undefined"
+    ? "/proxy" // browser → same-domain proxy → cookies work in middleware
+    : process.env.NEXT_PUBLIC_API_URL; // server-side → direct call
+
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL,
+  baseURL,
   withCredentials: true, // Important: send cookies automatically
 });
 
@@ -11,7 +19,7 @@ let failedQueue = [];
 
 // 2️⃣ Helper to process queued requests after token refresh
 const processQueue = (error, token = null) => {
-  failedQueue.forEach(prom => {
+  failedQueue.forEach((prom) => {
     if (error) {
       prom.reject(error);
     } else {
@@ -40,14 +48,14 @@ api.interceptors.response.use(
             originalRequest.headers["Authorization"] = `Bearer ${token}`;
             return api(originalRequest);
           })
-          .catch(err => Promise.reject(err));
+          .catch((err) => Promise.reject(err));
       }
 
       isRefreshing = true;
 
       try {
-        // 4️⃣ Call your refresh token endpoint
-        await api.post(`${process.env.NEXT_PUBLIC_API_URL}/user/refresh`); // your backend sets new access token in cookie
+        // 4️⃣ Call your refresh token endpoint (use relative path so the proxy is used)
+        await api.post("/user/refresh"); // your backend sets new access token in cookie
         isRefreshing = false;
 
         processQueue(null); // retry all queued requests
@@ -63,7 +71,7 @@ api.interceptors.response.use(
     }
 
     return Promise.reject(error);
-  }
+  },
 );
 
 export default api;
