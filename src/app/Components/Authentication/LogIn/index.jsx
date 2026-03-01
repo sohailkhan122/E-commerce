@@ -4,7 +4,7 @@ import { Button, Checkbox, Form, Input, message, Spin } from "antd";
 import { useRouter } from "next/navigation";
 import { loginUser } from "@/app/api/user";
 
-const LogIn = () => {
+const LogIn = ({ returnUrl }) => {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
@@ -13,10 +13,23 @@ const LogIn = () => {
     try {
       const data = await loginUser(values.email, values.password);
       message.success(data?.message || "Login successful!");
-      if (data?.isAdmin) {
-        router.push("/admin"); // admin dashboard route
+      // Compute final redirect target safely
+      let target = "/";
+      if (returnUrl) {
+        try {
+          const decoded = decodeURIComponent(returnUrl);
+          const urlObj = new URL(decoded, window.location.origin);
+          target = urlObj.pathname + urlObj.search;
+        } catch (e) {
+          // Fallback: use returnUrl if it's a simple path, otherwise home
+          target = returnUrl.startsWith("/") ? returnUrl : "/";
+        }
+          console.log("Redirecting to returnUrl:", target);
+          window.location.href = target;
+      } else if (data?.isAdmin) {
+          window.location.href = "/admin"; // admin dashboard route (full reload ensures middleware sees cookies)
       } else {
-        router.push("/"); // regular user route
+          window.location.href = "/"; // regular user route
       }
     } catch (error) {
       message.error(
@@ -81,7 +94,10 @@ const LogIn = () => {
             </Form.Item>
 
             <span
-              onClick={() => router.push("/forgot-password")}
+              onClick={() => {
+                const path = "/forgot-password" + (returnUrl ? `?returnUrl=${encodeURIComponent(returnUrl)}` : "");
+                router.push(path);
+              }}
               className="text-primary cursor-pointer text-sm hover:underline"
             >
               Forgot Password?
@@ -105,7 +121,10 @@ const LogIn = () => {
         <p className="text-center text-sm text-gray-500 mt-4">
           Don’t have an account?{" "}
           <span
-            onClick={() => router.push("/signin")}
+            onClick={() => {
+              const path = "/signin" + (returnUrl ? `?returnUrl=${encodeURIComponent(returnUrl)}` : "");
+              router.push(path);
+            }}
             className="text-primary cursor-pointer font-medium hover:underline"
           >
             Sign Up

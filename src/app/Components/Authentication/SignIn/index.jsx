@@ -4,7 +4,7 @@ import { Button, Form, Input, message, Spin } from "antd";
 import { useRouter } from "next/navigation";
 import { registerUser } from "@/app/api/user";
 
-const SignUp = () => {
+const SignUp = ({ returnUrl }) => {
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
@@ -15,7 +15,8 @@ const SignUp = () => {
       const data = await registerUser(values);
 
       message.success(data?.message || "Registration successful!");
-      router.push("/login");
+      const loginPath = "/login" + (returnUrl ? `?returnUrl=${encodeURIComponent(returnUrl)}` : "");
+      router.push(loginPath);
 
     } catch (error) {
       message.error(
@@ -107,7 +108,10 @@ const SignUp = () => {
         <p className="text-center text-sm text-gray-500 mt-4">
           Already have an account?{" "}
           <span
-            onClick={() => router.push("/login")}
+            onClick={() => {
+              const path = "/login" + (returnUrl ? `?returnUrl=${encodeURIComponent(returnUrl)}` : "");
+              router.push(path);
+            }}
             className="text-primary cursor-pointer font-medium hover:underline"
           >
             Login

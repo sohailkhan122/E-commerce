@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 
 export function middleware(request) {
   const { pathname } = request.nextUrl;
-  console.log("🚀 ~ pathname:", pathname);
+  // console.log("🚀 ~ pathname:", pathname);
   const accessToken = request.cookies.get("accessToken")?.value;
-  console.log(accessToken)
+  // console.log(accessToken)
 
   const publicRoutes = ["/", "/login", "/register", "/forget_password"];
   const secureRoutes = [
@@ -34,7 +34,10 @@ export function middleware(request) {
     pathname.startsWith(route),
   );
   if (isSecureRoute && !accessToken) {
-    return NextResponse.redirect(new URL("/login", request.url));
+    const loginUrl = new URL("/login", request.url);
+    const returnUrlVal = request.nextUrl.pathname + request.nextUrl.search;
+    loginUrl.searchParams.set("returnUrl", returnUrlVal);
+    return NextResponse.redirect(loginUrl);
   }
 
   // 🔐 Token check + admin check
@@ -52,7 +55,10 @@ export function middleware(request) {
 
       return NextResponse.next();
     } catch (err) {
-      const res = NextResponse.redirect(new URL("/login", request.url));
+      const loginUrl = new URL("/login", request.url);
+      const returnUrlVal = request.nextUrl.pathname + request.nextUrl.search;
+      loginUrl.searchParams.set("returnUrl", returnUrlVal);
+      const res = NextResponse.redirect(loginUrl);
       res.cookies.delete("accessToken");
       res.cookies.delete("refreshToken");
       return res;
